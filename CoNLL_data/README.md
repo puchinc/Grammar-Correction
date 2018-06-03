@@ -1,4 +1,4 @@
-The dataset are download from CoNLL2013 and CoNLL2014 Shared Task
+The dataset are downloaded from CoNLL2013 and CoNLL2014 Shared Task
 
 
 annotations_2014.txt is the annotation from CoNLL2014 shared task
