@@ -2,7 +2,7 @@
  "cells": [
   {
    "cell_type": "code",
-   "execution_count": 1,
+   "execution_count": 4,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -11,21 +11,13 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 59,
+   "execution_count": 45,
    "metadata": {},
-   "outputs": [
-    {
-     "ename": "SyntaxError",
-     "evalue": "invalid syntax (<ipython-input-59-34a22d459553>, line 53)",
-     "output_type": "error",
-     "traceback": [
-      "\u001b[0;36m  File \u001b[0;32m\"<ipython-input-59-34a22d459553>\"\u001b[0;36m, line \u001b[0;32m53\u001b[0m\n\u001b[0;31m    q = re.compile(\"\\?\")s\u001b[0m\n\u001b[0m                        ^\u001b[0m\n\u001b[0;31mSyntaxError\u001b[0m\u001b[0;31m:\u001b[0m invalid syntax\n"
-     ]
-    }
-   ],
+   "outputs": [],
    "source": [
-    "filepath = \"/home/h2y/Desktop/annotations_2014.txt\"\n",
-    "\n",
+    "file = \"5types\"\n",
+    "inputfilepath = \"/home/h2y/Desktop/nlp/CoNLL_data/annotations_\"+file+\".txt\"\n",
+    "outputpath = \"/home/h2y/Desktop/nlp/CoNLL_data/train\"+file+\".txt\"\n",
     "#Variables \n",
     "content = []\n",
     "annotation = []\n",
@@ -45,7 +37,7 @@
     "title = False\n",
     "\n",
     "\n",
-    "with open(filepath, encoding = \"ISO-8859-1\") as f:\n",
+    "with open(inputfilepath, encoding = \"ISO-8859-1\") as f:\n",
     "    \n",
     "    for line in f:\n",
     "        for word in line.split():\n",
@@ -62,8 +54,8 @@
     "                    end_par = int(cor[3])\n",
     "                    end_off = int(cor[4])\n",
     "                    correction = cor[5]\n",
-    "                    start = \"<del><\"+err_type+\">\"\n",
-    "                    end = \"</\"+err_type+\"></del><ins>\"+correction+\"</ins>\"\n",
+    "                    start = \"<del> <\"+err_type+\"> \"\n",
+    "                    end = \" </\"+err_type+\"> </del> <ins> \"+correction+\" </ins>\"\n",
     "\n",
     "                    #first match the par (start par and end par)\n",
     "                    #then match the off (start off and end off)\n",
@@ -72,15 +64,19 @@
     "                    \n",
     "                for para in content:\n",
     "                    for lines in para.split(\". \"):\n",
-    "                        if title:\n",
-    "                            print (lines, file = open(\"input_2014.txt\", \"a\"))\n",
-    "                            title = False\n",
-    "                        else:\n",
-    "                            q = re.compile(\"\\?\")\n",
-    "                            if lines != \"\" and not q.search(lines):\n",
-    "                                print (lines+\". \", file=open(\"input_2014.txt\", \"a\"))\n",
+    "                        #fixed = re.compile(r'<del>')\n",
+    "                        if re.search(r'<del>', lines):#fixed.search(word):\n",
+    "                            original = re.sub(r'<del> <([^>]+>) ', \"\", lines)\n",
+    "                            original = re.sub(r' </.*> </del> <ins> .* </ins>', \"\", original)\n",
+    "                            if title:                       \n",
+    "                                print (original, \"\\t\", lines, file = open(outputpath, \"a\"))\n",
+    "                                title = False\n",
     "                            else:\n",
-    "                                print (lines, file=open(\"input_2014.txt\", \"a\"))\n",
+    "                                q = re.compile(\"\\?\")                                        \n",
+    "                                if lines != \"\" and not q.search(lines):\n",
+    "                                    print (original+\". \\t\"+lines+\". \", file=open(outputpath, \"a\"))\n",
+    "                                else:\n",
+    "                                    print (original, \"\\t\", lines, file = open(outputpath, \"a\"))\n",
     "                content = []\n",
     "                annotation = []\n",
     "            #if beginning of text, store content for revision later\n",
@@ -188,13 +184,6 @@
     "                        correction += \" \"\n",
     "                "
    ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": []
   },
   {
    "cell_type": "code",
