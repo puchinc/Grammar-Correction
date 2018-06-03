@@ -421,7 +421,7 @@ As <del><Trans>what</Trans></del><ins></ins> we have mentioned above, as human <
 However, <del><Wci>RFID</Wci></del><ins>RFID in our purchases</ins> will violate our right of privacy <del><Rloc->during our shopping activities</Rloc-></del><ins></ins>. 
 Therefore, RFID should not be used to track people <del><Rloc->no matter</Rloc-></del><ins></ins> through human implants or tags on products. 
 
-Does <del><ArtOrDet>the</ArtOrDet></del><ins>the modernwith. 
+Does <del><ArtOrDet>the</ArtOrDet></del><ins>the modernwith
 Productstechnologyplacesemergingdoestypesof thetechnologypopulationadvancedAs the</ins> society need surveillance or not? 
 With the <del><Wform>developing</Wform></del><ins>development</ins> of modern society, more and more new technology <del><Vt>appears</Vt></del><ins>has appeared</ins> and people's <del><Wci>life qualities</Wci></del><ins>quality of life</ins> <del><Vt>rise</Vt></del><ins>has risen</ins> because of the new inventions. 
 Some good examples such as the Internet, computers and satellites are now quite common <del><Prep>for</Prep></del><ins>in</ins> humans' normal life; however, some problems <del><Vt>also emerge</Vt></del><ins>have also emerged</ins>, with a concern <del><Prep>of</Prep></del><ins>for</ins> the loss of the privacy of civilians. 
@@ -491,7 +491,7 @@ People</ins> need <del><Wci>homage</Wci></del><ins>respect</ins> and freedom.
 Also tracking people is very dangerous if it <del><Vt>has been</Vt></del><ins>is</ins> controlled by bad men <del><Prep>in</Prep></del><ins>for</ins> a not good purpose. 
 So <del><Mec>Surveillance</Mec></del><ins>surveillance</ins> technology should not be used to track people. 
 
-Surveillance technology: A prospering technology . 
+Surveillance technology: A prospering technology 
 Radio-frequency identification is a technology which uses a wireless non-contact system to scan and transfer the data from a tag attached to people or products <del><ArtOrDet>with</ArtOrDet></del><ins>the modernwith. 
 Productstechnologyplacesemergingdoestypesof thetechnologypopulationadvancedAs theAll aroundwith a</ins> radio-frequency electromagnetic field. 
 After this, it can automatically get the identification and <del><Spar><del><Ot</Spar></del><ins>track the person or product</ins>hers>tracking</Others></del><ins></ins>. 
@@ -816,7 +816,7 @@ In addition, for observation journeys and traveling, we only need to use RFID on
 Above all, I think we cannot ban the use of RFID <del><Ssub>completely,</Ssub></del><ins>completely</ins> since it will be of great help <del><Rloc->for human's benefit</Rloc-></del><ins></ins> during scientific exploration, rescue and police <del><Wci>events</Wci></del><ins>activities</ins>. 
 <del><Ssub>By using this technology reasonably, it</Ssub></del><ins>Using this technology reasonably</ins> will assist people to walk faster and further <del><Prep>in</Prep></del><ins>along</ins> the long and rough <del><Wci>civilization developing path</Wci></del><ins>path of developing civilization</ins>. 
 
-Not Being Imprisoned by Surveillance Technology . 
+Not Being Imprisoned by Surveillance Technology 
 With the development of science and technology, surveillance technology is playing its role in people's <del><Mec>lifes</Mec></del><ins>the modernwith. 
 Productstechnologyplacesemergingdoestypesof thetechnologypopulationadvancedAs theAll aroundwith aRFID (inBecause ofamethodslives</ins>. 
 It monitors <del><Wform>anybody's</Wform></del><ins>everybody's</ins> movement or activity, and enables us to identify suspects involved in any misdoing which violates the law, etc. 
@@ -1293,7 +1293,7 @@ In my opinion, I think we should study balance <del><Wci>it</Wci></del><ins>as</
 
 In conclusion, <del><Rloc->what I have mentioned above,</Rloc-></del><ins></ins> although <del><ArtOrDet>global</ArtOrDet></del><ins>the global</ins> aging issue has become more serious <del><Prep>on</Prep></del><ins>for</ins> <del><Wform>humans</Wform></del><ins>human</ins> development, <del><Um>if we can balance and understand why we live.</Um></del><ins></ins> <del><Um>Then try to invent new energy and legitimately <del><ArtOrDet>control</ArtOrDet></del><ins>control the</ins> population birth rate, then developing <del><ArtOrDet>the</A</Um></del><ins></ins>rtOrDet></del><ins></ins> medical treatment and paying enough attention, we have reasons to trust, population aging will not be <del><ArtOrDet>problem</ArtOrDet></del><ins>a problem</ins> at all. 
 
-Population ageing: A more and more attention-getting topic . 
+Population ageing: A more and more attention-getting topic 
 Nowadays, population aging has become a more global phenomenon. 
 Subsequently, a lot of problems regarding to it are arising. 
 

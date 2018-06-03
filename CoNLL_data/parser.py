@@ -1,157 +1,228 @@
-import re
-
-filepath = "/home/h2y/Desktop/annotations_alltypes.txt"
-
-#Variables 
-content = []
-annotation = []
-par = ""
-err_type = ""
-start_par = ""
-start_off = ""
-end_par = ""
-end_off = ""
-correction = ""
-
-#T/F variables
-skip = False
-text = False
-mistake = False
-correct = False
-
-
-with open(filepath, encoding = "ISO-8859-1") as f:
-    
-    for line in f:
-        for word in line.split():
-            
-            #if end of doc, print 
-            endofdoc = re.compile("</DOC>")
-            if endofdoc.search(word):
-                
-                annotation.reverse()
-                for cor in annotation: 
-                    err_type = cor[0]
-                    start_par = int(cor[1])
-                    start_off = int(cor[2])
-                    end_par = int(cor[3])
-                    end_off = int(cor[4])
-                    correction = cor[5]
-                    start = "<del><"+err_type+">"
-                    end = "</"+err_type+"></del><ins>"+correction+"</ins>"
-
-                    #first match the par (start par and end par)
-                    #then match the off (start off and end off)
-                    content[end_par] = content[end_par][:end_off]+end+content[end_par][end_off:]
-                    content[start_par] = content[start_par][:start_off]+start+content[start_par][start_off:]       
-                    
-                for para in content:
-                    for lines in para.split(". "):
-                        q = re.compile("\?")
-                        if lines != "" and not q.search(lines):
-                            print (lines+". ", file=open("input_alltypes.txt", "a"))
-                        else:
-                            print (lines, file=open("input_alltypes.txt", "a"))
-                content = []
-                annotation = []
-            #if beginning of text, store content for revision later
-            elif word == "<TEXT>":
-                text = True
-            elif word == "</TEXT>":
-                text = False
-                
-            #if beginning of mistake, store the info to revise the content 
-            elif word == "<MISTAKE":
-                mistake = True
-            elif word == "</MISTAKE>":
-                cor_tuple = [err_type, start_par, start_off, end_par, end_off, correction]
-                annotation.append(cor_tuple)
-                err_type = ""
-                start_par = ""
-                start_off = ""
-                end_par = ""
-                end_off = ""
-                correction = ""
-                mistake = False                       
-            
-            #action
-            elif text:
-                tstart = re.compile("<TITLE>")
-                tend = re.compile("</TITLE>")
-                pstart = re.compile("<P>")
-                pend = re.compile("</P>")
-                if pend.search(word) or tend.search(word):
-                    content.append(par)
-                    #print (par)
-                    par = ""
-                elif not pstart.search(word) and not tstart.search(word):
-                    par += word + " "
-                
-            elif mistake:
-                startpar = re.compile("start_par=")
-                startoff = re.compile("start_off=")
-                endpar = re.compile("end_par=")
-                endoff = re.compile("end_off=")
-                errtype = re.compile("<TYPE>")
-                startcorrection = re.compile("<CORRECTION>")
-                endcorrection = re.compile("</CORRECTION>")
-                
-                if startpar.search(word):
-                    word0 = word.replace("\"", "")
-                    word0 = word0.replace("start_par=", "")
-                    start_par = int(word0)
-                    #print ("====start_par===")
-                    #print (start_par)
-                elif startoff.search(word):
-                    word0 = word.replace("\"", "")
-                    word0 = word0.replace("start_off=", "")
-                    start_off = int(word0)
-                    #print ("====start_off====")
-                    #print (start_off)
-                elif endpar.search(word):
-                    word0 = word.replace("\"", "")
-                    word0 = word0.replace("end_par=", "")
-                    end_par = int(word0)
-                    #print ("====end_par====")
-                    #print (end_par)
-                elif endoff.search(word):
-                    word0 = word.replace("\"", "")
-                    word0 = word0.replace("end_off=", "")
-                    word0 = word0.replace(">", "")
-                    end_off = int(word0)
-                    #print ("====end_off====")
-                    #print (end_off)
-                elif errtype.search(word):
-                    word0 = word.replace("<TYPE>", "")
-                    word0 = word0.replace("</TYPE>", "")
-                    err_type = word0
-                    #print ("====err_type====")
-                    #print (err_type)
-                    
-                #enter correction
-                elif startcorrection.search(word):
-                    word0 = word.replace("<CORRECTION>", "")
-                    
-                    #if only one word
-                    if endcorrection.search(word):
-                        word0 = word0.replace("</CORRECTION>", "")
-                        correction += word0
-                        #print ("====correction====")
-                        #print (correction)
-                    #if more than one word
-                    else:
-                        correct = True
-                        correction += word0
-                        correction += " "
-                    
-                elif correct:
-                    if endcorrection.search(word):
-                        word0 = word.replace("</CORRECTION>", "")
-                        correction += word0
-                        correct = False
-                        #print ("====correction====")
-                        #print (correction)
-                    else:
-                        correction += word
-                        correction += " "
-                
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import re"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 59,
+   "metadata": {},
+   "outputs": [
+    {
+     "ename": "SyntaxError",
+     "evalue": "invalid syntax (<ipython-input-59-34a22d459553>, line 53)",
+     "output_type": "error",
+     "traceback": [
+      "\u001b[0;36m  File \u001b[0;32m\"<ipython-input-59-34a22d459553>\"\u001b[0;36m, line \u001b[0;32m53\u001b[0m\n\u001b[0;31m    q = re.compile(\"\\?\")s\u001b[0m\n\u001b[0m                        ^\u001b[0m\n\u001b[0;31mSyntaxError\u001b[0m\u001b[0;31m:\u001b[0m invalid syntax\n"
+     ]
+    }
+   ],
+   "source": [
+    "filepath = \"/home/h2y/Desktop/annotations_2014.txt\"\n",
+    "\n",
+    "#Variables \n",
+    "content = []\n",
+    "annotation = []\n",
+    "par = \"\"\n",
+    "err_type = \"\"\n",
+    "start_par = \"\"\n",
+    "start_off = \"\"\n",
+    "end_par = \"\"\n",
+    "end_off = \"\"\n",
+    "correction = \"\"\n",
+    "\n",
+    "#T/F variables\n",
+    "skip = False\n",
+    "text = False\n",
+    "mistake = False\n",
+    "correct = False\n",
+    "title = False\n",
+    "\n",
+    "\n",
+    "with open(filepath, encoding = \"ISO-8859-1\") as f:\n",
+    "    \n",
+    "    for line in f:\n",
+    "        for word in line.split():\n",
+    "            \n",
+    "            #if end of doc, print \n",
+    "            endofdoc = re.compile(\"</DOC>\")\n",
+    "            if endofdoc.search(word):\n",
+    "                \n",
+    "                annotation.reverse()\n",
+    "                for cor in annotation: \n",
+    "                    err_type = cor[0]\n",
+    "                    start_par = int(cor[1])\n",
+    "                    start_off = int(cor[2])\n",
+    "                    end_par = int(cor[3])\n",
+    "                    end_off = int(cor[4])\n",
+    "                    correction = cor[5]\n",
+    "                    start = \"<del><\"+err_type+\">\"\n",
+    "                    end = \"</\"+err_type+\"></del><ins>\"+correction+\"</ins>\"\n",
+    "\n",
+    "                    #first match the par (start par and end par)\n",
+    "                    #then match the off (start off and end off)\n",
+    "                    content[end_par] = content[end_par][:end_off]+end+content[end_par][end_off:]\n",
+    "                    content[start_par] = content[start_par][:start_off]+start+content[start_par][start_off:]       \n",
+    "                    \n",
+    "                for para in content:\n",
+    "                    for lines in para.split(\". \"):\n",
+    "                        if title:\n",
+    "                            print (lines, file = open(\"input_2014.txt\", \"a\"))\n",
+    "                            title = False\n",
+    "                        else:\n",
+    "                            q = re.compile(\"\\?\")\n",
+    "                            if lines != \"\" and not q.search(lines):\n",
+    "                                print (lines+\". \", file=open(\"input_2014.txt\", \"a\"))\n",
+    "                            else:\n",
+    "                                print (lines, file=open(\"input_2014.txt\", \"a\"))\n",
+    "                content = []\n",
+    "                annotation = []\n",
+    "            #if beginning of text, store content for revision later\n",
+    "            elif word == \"<TEXT>\":\n",
+    "                text = True\n",
+    "            elif word == \"</TEXT>\":\n",
+    "                text = False\n",
+    "                \n",
+    "            #if beginning of mistake, store the info to revise the content \n",
+    "            elif word == \"<MISTAKE\":\n",
+    "                mistake = True\n",
+    "            elif word == \"</MISTAKE>\":\n",
+    "                cor_tuple = [err_type, start_par, start_off, end_par, end_off, correction]\n",
+    "                annotation.append(cor_tuple)\n",
+    "                err_type = \"\"\n",
+    "                start_par = \"\"\n",
+    "                start_off = \"\"\n",
+    "                end_par = \"\"\n",
+    "                end_off = \"\"\n",
+    "                correction = \"\"\n",
+    "                mistake = False                       \n",
+    "            \n",
+    "            #action\n",
+    "            elif text:\n",
+    "                tstart = re.compile(\"<TITLE>\")\n",
+    "                tend = re.compile(\"</TITLE>\")\n",
+    "                pstart = re.compile(\"<P>\")\n",
+    "                pend = re.compile(\"</P>\")\n",
+    "                if pend.search(word) or tend.search(word):\n",
+    "                    content.append(par)\n",
+    "                    #print (par)\n",
+    "                    par = \"\"\n",
+    "                elif not pstart.search(word) and not tstart.search(word):\n",
+    "                    par += word + \" \"\n",
+    "                    \n",
+    "                if tstart.search(word):\n",
+    "                    title = True\n",
+    "                \n",
+    "            elif mistake:\n",
+    "                startpar = re.compile(\"start_par=\")\n",
+    "                startoff = re.compile(\"start_off=\")\n",
+    "                endpar = re.compile(\"end_par=\")\n",
+    "                endoff = re.compile(\"end_off=\")\n",
+    "                errtype = re.compile(\"<TYPE>\")\n",
+    "                startcorrection = re.compile(\"<CORRECTION>\")\n",
+    "                endcorrection = re.compile(\"</CORRECTION>\")\n",
+    "                \n",
+    "                if startpar.search(word):\n",
+    "                    word0 = word.replace(\"\\\"\", \"\")\n",
+    "                    word0 = word0.replace(\"start_par=\", \"\")\n",
+    "                    start_par = int(word0)\n",
+    "                    #print (\"====start_par===\")\n",
+    "                    #print (start_par)\n",
+    "                elif startoff.search(word):\n",
+    "                    word0 = word.replace(\"\\\"\", \"\")\n",
+    "                    word0 = word0.replace(\"start_off=\", \"\")\n",
+    "                    start_off = int(word0)\n",
+    "                    #print (\"====start_off====\")\n",
+    "                    #print (start_off)\n",
+    "                elif endpar.search(word):\n",
+    "                    word0 = word.replace(\"\\\"\", \"\")\n",
+    "                    word0 = word0.replace(\"end_par=\", \"\")\n",
+    "                    end_par = int(word0)\n",
+    "                    #print (\"====end_par====\")\n",
+    "                    #print (end_par)\n",
+    "                elif endoff.search(word):\n",
+    "                    word0 = word.replace(\"\\\"\", \"\")\n",
+    "                    word0 = word0.replace(\"end_off=\", \"\")\n",
+    "                    word0 = word0.replace(\">\", \"\")\n",
+    "                    end_off = int(word0)\n",
+    "                    #print (\"====end_off====\")\n",
+    "                    #print (end_off)\n",
+    "                elif errtype.search(word):\n",
+    "                    word0 = word.replace(\"<TYPE>\", \"\")\n",
+    "                    word0 = word0.replace(\"</TYPE>\", \"\")\n",
+    "                    err_type = word0\n",
+    "                    #print (\"====err_type====\")\n",
+    "                    #print (err_type)\n",
+    "                    \n",
+    "                #enter correction\n",
+    "                elif startcorrection.search(word):\n",
+    "                    word0 = word.replace(\"<CORRECTION>\", \"\")\n",
+    "                    \n",
+    "                    #if only one word\n",
+    "                    if endcorrection.search(word):\n",
+    "                        word0 = word0.replace(\"</CORRECTION>\", \"\")\n",
+    "                        correction += word0\n",
+    "                        #print (\"====correction====\")\n",
+    "                        #print (correction)\n",
+    "                    #if more than one word\n",
+    "                    else:\n",
+    "                        correct = True\n",
+    "                        correction += word0\n",
+    "                        correction += \" \"\n",
+    "                    \n",
+    "                elif correct:\n",
+    "                    if endcorrection.search(word):\n",
+    "                        word0 = word.replace(\"</CORRECTION>\", \"\")\n",
+    "                        correction += word0\n",
+    "                        correct = False\n",
+    "                        #print (\"====correction====\")\n",
+    "                        #print (correction)\n",
+    "                    else:\n",
+    "                        correction += word\n",
+    "                        correction += \" \"\n",
+    "                "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.6.4"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
