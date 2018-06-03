@@ -1,7 +1,7 @@
+# Need allennlp with torch==0.3.1 && GPU
+
 from allennlp.modules.elmo import Elmo, batch_to_ids
 from helper import *
-
-input_lang, output_lang, pairs = prepareData('eng', 'fra', True)
 
 options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json"
 weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
@@ -17,4 +17,6 @@ def elmoFromPair(pair):
     output_tensor = elmo(output_character_ids)
     return (input_tensor, output_tensor)
 
+
+input_lang, output_lang, pairs = prepareData('eng', 'fra', True)
 print(elmoFromPair(pairs[0])) 
