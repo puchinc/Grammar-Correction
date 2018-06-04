@@ -29,7 +29,7 @@ elmo	elmo.py	/^elmo = Elmo(options_file, weight_file, 2, dropout=0)$/;"	v
 elmo	elmo.py	1;"	F
 elmoFromPair	elmo.py	/^def elmoFromPair(pair):$/;"	f
 emb_path	elmo.py	/^    emb_path = 'CoNLL_data\/train.elmo'$/;"	v
-embeddings	elmo.py	/^        embeddings = elmoFromPair(pairs[0])$/;"	v
+embeddings	elmo.py	/^    embeddings = [elmoFromPair(pair) for pair in pairs]$/;"	v
 eng_prefixes	helper.py	/^eng_prefixes = ($/;"	v
 evaluate	evaluate.py	/^def evaluate(encoder, decoder, sentence, max_length=MAX_LENGTH):$/;"	f
 evaluate	evaluate.py	1;"	F
@@ -50,7 +50,7 @@ loadConll	train.py	/^def loadConll(path='CoNLL_data\/train.txt'):$/;"	f
 load_elmo_pairs	train.py	/^def load_elmo_pairs(path):$/;"	f
 normalizeString	helper.py	/^def normalizeString(s):$/;"	f
 options_file	elmo.py	/^options_file = "https:\/\/s3-us-west-2.amazonaws.com\/allennlp\/models\/elmo\/2x4096_512_2048cnn_2xhighway\/elmo_2x4096_512_2048cnn_2xhighway_options.json" $/;"	v
-pairs	elmo.py	/^    pairs = [[['First', 'sentence', '.'], ['Another', '.']]]$/;"	v
+pairs	elmo.py	/^    pairs = loadConll()[:10]$/;"	v
 parser	CoNLL_data/parser.py	1;"	F
 prepareData	helper.py	/^def prepareData(lang1, lang2, reverse=False):$/;"	f
 readLangs	helper.py	/^def readLangs(lang1, lang2, reverse=False):$/;"	f
@@ -61,6 +61,6 @@ tensorsFromPair	train.py	/^def tensorsFromPair(pair):$/;"	f
 timeSince	helper.py	/^def timeSince(since, percent):$/;"	f
 train	train.py	/^def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, max_length=MAX_LENGTH):$/;"	f
 train	train.py	1;"	F
-trainIters	train.py	/^def trainIters(pairs, encoder, decoder, n_iters, print_every=1000, plot_every=100, learning_rate=0.01):$/;"	f
+trainIters	train.py	/^def trainIters(pairs, encoder, decoder, n_iters=75000, print_every=1000, plot_every=100, learning_rate=0.01):$/;"	f
 unicodeToAscii	helper.py	/^def unicodeToAscii(s):$/;"	f
 weight_file	elmo.py	/^weight_file = "https:\/\/s3-us-west-2.amazonaws.com\/allennlp\/models\/elmo\/2x4096_512_2048cnn_2xhighway\/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"$/;"	v

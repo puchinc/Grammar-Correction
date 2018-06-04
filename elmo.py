@@ -19,19 +19,20 @@ def loadConll(path='CoNLL_data/train.txt'):
     return pairs
 
 def elmoFromPair(pair):
-    character_ids = batch_to_ids(pair)
-    input_tensor, output_tensor = elmo(character_ids)['elmo_representations']
     # choose layer 2 representations
     layer = 1
-    return (input_tensor[layer], output_tensor[layer])
+    character_ids = batch_to_ids(pair)
+    input_tensor, output_tensor = elmo(character_ids)['elmo_representations'][layer].data
+    return (input_tensor, output_tensor)
 
 # input_lang, output_lang, pairs = prepareData('eng', 'fra', True)
 if __name__ == '__main__':
-    # pairs = loadConll()
-    # input_tensor, output_tensor = elmoFromPair(pairs[0]) 
-
-    pairs = [[['First', 'sentence', '.'], ['Another', '.']]]
     emb_path = 'CoNLL_data/train.elmo'
-    embeddings = elmoFromPair(pairs[0])
+
+    # subset
+    pairs = loadConll()[:10]
+    # pairs = [[['First', 'sentence', '.'], ['Another', '.']]]
+
+    embeddings = [elmoFromPair(pair) for pair in pairs]
     with open(emb_path, 'wb') as file:
         pickle.dump(embeddings, file)

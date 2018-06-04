@@ -12,7 +12,7 @@ import torch.nn.functional as F
 
 from Lang import *
 
-MAX_LENGTH = 10
+MAX_LENGTH = 40
 
 eng_prefixes = (
     "i am ", "i m ",
@@ -39,8 +39,9 @@ def readLangs(lang1, lang2, reverse=False):
     print("Reading lines...")
 
     # Read the file and split into lines
-    lines = open('data/%s-%s.txt' % (lang1, lang2), encoding='utf-8').\
-        read().strip().split('\n')
+    lines = open('CoNLL_data/train.txt', encoding='utf-8').read().strip().split('\n')
+    # lines = open('data/%s-%s.txt' % (lang1, lang2), encoding='utf-8').\
+    #     read().strip().split('\n')
 
     # Split every line into pairs and normalize
     pairs = [[normalizeString(s) for s in l.split('\t')] for l in lines]
@@ -58,8 +59,10 @@ def readLangs(lang1, lang2, reverse=False):
 
 def filterPair(p):
     return len(p[0].split(' ')) < MAX_LENGTH and \
-        len(p[1].split(' ')) < MAX_LENGTH and \
-        p[1].startswith(eng_prefixes)
+        len(p[1].split(' ')) < MAX_LENGTH 
+    # return len(p[0].split(' ')) < MAX_LENGTH and \
+    #     len(p[1].split(' ')) < MAX_LENGTH and \
+    #     p[1].startswith(eng_prefixes)
 
 
 def filterPairs(pairs):

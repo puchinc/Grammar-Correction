@@ -17,7 +17,8 @@ from EncoderRNN import *
 from Lang import *
 from helper import *
 
-device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
 SOS_token = 0
 EOS_token = 1
 
@@ -27,10 +28,7 @@ def loadConll(path='CoNLL_data/train.txt'):
     return pairs
 
 def indexesFromSentence(lang, sentence):
-    # old
     return [lang.word2index[word] for word in sentence.split(' ')]
-    # return [lang.word2index[word] for word in sentence]
-    # return [lang.word2index.get(word, 999) for word in sentence]
 
 def tensorFromSentence(lang, sentence):
     indexes = indexesFromSentence(lang, sentence)
@@ -41,12 +39,6 @@ def tensorsFromPair(pair):
     input_tensor = tensorFromSentence(input_lang, pair[0])
     target_tensor = tensorFromSentence(output_lang, pair[1])
     return (input_tensor, target_tensor)
-
-# TODO: load data pairs
-
-# TODO: tensorsFromElmo
-# def tensorsFromElmo(pair):
-#     return (input_tensor, target_tensor)
 
 def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, max_length=MAX_LENGTH):
     
@@ -95,7 +87,7 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
 
     return loss.item() / target_length
 
-def trainIters(pairs, encoder, decoder, n_iters, print_every=1000, plot_every=100, learning_rate=0.01):
+def trainIters(pairs, encoder, decoder, n_iters=75000, print_every=1000, plot_every=100, learning_rate=0.01):
     start = time.time()
     plot_losses = []
     print_loss_total = 0  # Reset every print_every
@@ -103,9 +95,8 @@ def trainIters(pairs, encoder, decoder, n_iters, print_every=1000, plot_every=10
 
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
-    # training_pairs = [tensorsFromPair(random.choice(pairs))
-    #                   for i in range(n_iters)]
-    training_pairs = [random.choice(pairs) for i in range(n_iters)]
+    training_pairs = [tensorsFromPair(random.choice(pairs)) for i in range(n_iters)]
+    # training_pairs = [random.choice(pairs) for i in range(n_iters)]
 
     criterion = nn.NLLLoss()
 
@@ -114,9 +105,6 @@ def trainIters(pairs, encoder, decoder, n_iters, print_every=1000, plot_every=10
         input_tensor = training_pair[0]
         target_tensor = training_pair[1]
 
-        print(input_tensor.size())
-        print(target_tensor.size())
-        exit()
         loss = train(input_tensor, target_tensor, encoder,
                      decoder, encoder_optimizer, decoder_optimizer, criterion)
         print_loss_total += loss
@@ -140,15 +128,17 @@ def load_elmo_pairs(path):
         return pickle.load(elmo)
 
 if __name__ == '__main__':
-    input_lang, output_lang, pairs = prepareData('eng', 'fra', True)
-    # print(random.choice(pairs))
-    emb_path = 'CoNLL_data/train.elmo'
-    pairs = load_elmo_pairs(emb_path)
+    input_lang, output_lang, pairs = prepareData('wrong', 'correct')
+    print(random.choice(pairs))
+
+    # emb_path = 'CoNLL_data/train.elmo'
+    # input_lang = output_lang
+    # pairs = load_elmo_pairs(emb_path)
 
     teacher_forcing_ratio = 0.5
 
     hidden_size = 256
-    encoder1 = EncoderRNN(input_lang.n_words, hidden_size).to(device)
-    attn_decoder1 = AttnDecoderRNN(hidden_size, output_lang.n_words, dropout_p=0.1).to(device)
+    encoder = EncoderRNN(input_lang.n_words, hidden_size).to(device)
+    decoder = AttnDecoderRNN(hidden_size, output_lang.n_words, dropout_p=0.1).to(device)
 
-    trainIters(pairs, encoder1, attn_decoder1, 75000, print_every=5000)
+    trainIters(pairs, encoder, decoder, 75000, print_every=5000)
