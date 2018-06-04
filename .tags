@@ -1,0 +1,66 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.8	//
+AttnDecoderRNN	AttnDecoderRNN.py	/^class AttnDecoderRNN(nn.Module):$/;"	c
+AttnDecoderRNN	AttnDecoderRNN.py	1;"	F
+DecoderRNN	DecoderRNN.py	/^class DecoderRNN(nn.Module):$/;"	c
+DecoderRNN	DecoderRNN.py	1;"	F
+EOS_token	train.py	/^EOS_token = 1$/;"	v
+EncoderRNN	EncoderRNN.py	/^class EncoderRNN(nn.Module):$/;"	c
+EncoderRNN	EncoderRNN.py	1;"	F
+Lang	Lang.py	/^class Lang:$/;"	c
+Lang	Lang.py	1;"	F
+MAX_LENGTH	AttnDecoderRNN.py	/^MAX_LENGTH = 10$/;"	v
+MAX_LENGTH	helper.py	/^MAX_LENGTH = 10$/;"	v
+SOS_token	train.py	/^SOS_token = 0$/;"	v
+__init__	AttnDecoderRNN.py	/^    def __init__(self, hidden_size, output_size, dropout_p=0.1, max_length=MAX_LENGTH):$/;"	m	class:AttnDecoderRNN
+__init__	DecoderRNN.py	/^    def __init__(self, hidden_size, output_size):$/;"	m	class:DecoderRNN
+__init__	EncoderRNN.py	/^    def __init__(self, input_size, hidden_size):$/;"	m	class:EncoderRNN
+__init__	Lang.py	/^    def __init__(self, name):$/;"	m	class:Lang
+addSentence	Lang.py	/^    def addSentence(self, sentence):$/;"	m	class:Lang
+addWord	Lang.py	/^    def addWord(self, word):$/;"	m	class:Lang
+asMinutes	helper.py	/^def asMinutes(s):$/;"	f
+device	EncoderRNN.py	/^device = torch.device("cuda" if torch.cuda.is_available() else "cpu")$/;"	v
+device	train.py	/^device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")$/;"	v
+elmo	elmo.py	/^elmo = Elmo(options_file, weight_file, 2, dropout=0)$/;"	v
+elmo	elmo.py	1;"	F
+elmoFromPair	elmo.py	/^def elmoFromPair(pair):$/;"	f
+emb_path	elmo.py	/^    emb_path = 'CoNLL_data\/train.elmo'$/;"	v
+embeddings	elmo.py	/^        embeddings = elmoFromPair(pairs[0])$/;"	v
+eng_prefixes	helper.py	/^eng_prefixes = ($/;"	v
+evaluate	evaluate.py	/^def evaluate(encoder, decoder, sentence, max_length=MAX_LENGTH):$/;"	f
+evaluate	evaluate.py	1;"	F
+evaluateAndShowAttention	evaluate.py	/^def evaluateAndShowAttention(input_sentence):$/;"	f
+evaluateRandomly	evaluate.py	/^def evaluateRandomly(encoder, decoder, n=10):$/;"	f
+filterPair	helper.py	/^def filterPair(p):$/;"	f
+filterPairs	helper.py	/^def filterPairs(pairs):$/;"	f
+forward	AttnDecoderRNN.py	/^    def forward(self, input, hidden, encoder_outputs):$/;"	m	class:AttnDecoderRNN
+forward	DecoderRNN.py	/^    def forward(self, input, hidden):$/;"	m	class:DecoderRNN
+forward	EncoderRNN.py	/^    def forward(self, input, hidden):$/;"	m	class:EncoderRNN
+helper	helper.py	1;"	F
+indexesFromSentence	train.py	/^def indexesFromSentence(lang, sentence):$/;"	f
+initHidden	AttnDecoderRNN.py	/^    def initHidden(self):$/;"	m	class:AttnDecoderRNN
+initHidden	DecoderRNN.py	/^    def initHidden(self):$/;"	m	class:DecoderRNN
+initHidden	EncoderRNN.py	/^    def initHidden(self):$/;"	m	class:EncoderRNN
+loadConll	elmo.py	/^def loadConll(path='CoNLL_data\/train.txt'):$/;"	f
+loadConll	train.py	/^def loadConll(path='CoNLL_data\/train.txt'):$/;"	f
+load_elmo_pairs	train.py	/^def load_elmo_pairs(path):$/;"	f
+normalizeString	helper.py	/^def normalizeString(s):$/;"	f
+options_file	elmo.py	/^options_file = "https:\/\/s3-us-west-2.amazonaws.com\/allennlp\/models\/elmo\/2x4096_512_2048cnn_2xhighway\/elmo_2x4096_512_2048cnn_2xhighway_options.json" $/;"	v
+pairs	elmo.py	/^    pairs = [[['First', 'sentence', '.'], ['Another', '.']]]$/;"	v
+parser	CoNLL_data/parser.py	1;"	F
+prepareData	helper.py	/^def prepareData(lang1, lang2, reverse=False):$/;"	f
+readLangs	helper.py	/^def readLangs(lang1, lang2, reverse=False):$/;"	f
+showAttention	evaluate.py	/^def showAttention(input_sentence, output_words, attentions):$/;"	f
+showPlot	helper.py	/^def showPlot(points):$/;"	f
+tensorFromSentence	train.py	/^def tensorFromSentence(lang, sentence):$/;"	f
+tensorsFromPair	train.py	/^def tensorsFromPair(pair):$/;"	f
+timeSince	helper.py	/^def timeSince(since, percent):$/;"	f
+train	train.py	/^def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, max_length=MAX_LENGTH):$/;"	f
+train	train.py	1;"	F
+trainIters	train.py	/^def trainIters(pairs, encoder, decoder, n_iters, print_every=1000, plot_every=100, learning_rate=0.01):$/;"	f
+unicodeToAscii	helper.py	/^def unicodeToAscii(s):$/;"	f
+weight_file	elmo.py	/^weight_file = "https:\/\/s3-us-west-2.amazonaws.com\/allennlp\/models\/elmo\/2x4096_512_2048cnn_2xhighway\/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"$/;"	v
