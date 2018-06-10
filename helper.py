@@ -11,17 +11,7 @@ from torch import optim
 import torch.nn.functional as F
 
 from Lang import *
-
-MAX_LENGTH = 40
-
-eng_prefixes = (
-    "i am ", "i m ",
-    "he is", "he s ",
-    "she is", "she s",
-    "you are", "you re ",
-    "we are", "we re ",
-    "they are", "they re "
-)
+from config import *
 
 def unicodeToAscii(s):
     return ''.join(
@@ -35,11 +25,11 @@ def normalizeString(s):
     s = re.sub(r"[^\-</>a-zA-Z.!?]+", r" ", s)
     return s
 
-def readLangs(lang1, lang2, reverse=False):
+def readLangs(path, lang1, lang2, reverse=False):
     print("Reading lines...")
 
     # Read the file and split into lines
-    lines = open('CoNLL_data/train.txt', encoding='utf-8').read().strip().split('\n')
+    lines = open(path, encoding='utf-8').read().strip().split('\n')
     # lines = open('data/%s-%s.txt' % (lang1, lang2), encoding='utf-8').\
     #     read().strip().split('\n')
 
@@ -64,15 +54,14 @@ def filterPair(p):
     #     len(p[1].split(' ')) < MAX_LENGTH and \
     #     p[1].startswith(eng_prefixes)
 
-
 def filterPairs(pairs):
-    return [pair for pair in pairs if filterPair(pair)]
+    idx, pair = zip(*[(i, pair) for i, pair in enumerate(pairs) if filterPair(pair)]) 
+    return list(idx), list(pair)
 
-
-def prepareData(lang1, lang2, reverse=False):
-    input_lang, output_lang, pairs = readLangs(lang1, lang2, reverse)
+def prepareData(path, lang1, lang2, reverse=False):
+    input_lang, output_lang, pairs = readLangs(path, lang1, lang2, reverse)
     print("Read %s sentence pairs" % len(pairs))
-    pairs = filterPairs(pairs)
+    indices, pairs = filterPairs(pairs)
     print("Trimmed to %s sentence pairs" % len(pairs))
     print("Counting words...")
     for pair in pairs:
@@ -81,7 +70,7 @@ def prepareData(lang1, lang2, reverse=False):
     print("Counted words:")
     print(input_lang.name, input_lang.n_words)
     print(output_lang.name, output_lang.n_words)
-    return input_lang, output_lang, pairs
+    return input_lang, output_lang, indices, pairs
 
 
 import time

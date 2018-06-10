@@ -95,7 +95,7 @@ import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
 
-# device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
 device = torch.device("cpu")
 
 ######################################################################
@@ -208,6 +208,8 @@ def readLangs(lang1, lang2, reverse=False):
     print("Reading lines...")
 
     # Read the file and split into lines
+    # lines = open('CoNLL_data/train_baseline.txt', encoding='utf-8').\
+    #     read().strip().split('\n')
     lines = open('CoNLL_data/train.txt', encoding='utf-8').\
         read().strip().split('\n')
 
@@ -235,7 +237,7 @@ def readLangs(lang1, lang2, reverse=False):
 # earlier).
 #
 
-MAX_LENGTH = 30
+MAX_LENGTH = 10
 
 eng_prefixes = (
     "i am ", "i m ",
@@ -281,10 +283,8 @@ def prepareData(lang1, lang2, reverse=False):
     print(output_lang.name, output_lang.n_words)
     return input_lang, output_lang, pairs
 
-
 input_lang, output_lang, pairs = prepareData('eng', 'fra')
 print(random.choice(pairs))
-
 
 ######################################################################
 # The Seq2Seq Model
@@ -634,8 +634,11 @@ def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, lear
 
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
-    training_pairs = [tensorsFromPair(random.choice(pairs))
-                      for i in range(n_iters)]
+    training_pairs = [tensorsFromPair(random.choice(pairs)) for i in range(n_iters)]
+    
+    # print(pairs)
+    # n_iters = min(n_iters, len(pairs))
+    # training_pairs = [tensorsFromPair(pairs[i]) for i in range(n_iters)]
     criterion = nn.NLLLoss()
 
     for iter in range(1, n_iters + 1):
@@ -651,8 +654,9 @@ def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, lear
         if iter % print_every == 0:
             print_loss_avg = print_loss_total / print_every
             print_loss_total = 0
-            print('%s (%d %d%%) %.4f' % (timeSince(start, iter / n_iters),
-                                         iter, iter / n_iters * 100, print_loss_avg))
+            print('%d %.4f' % (iter, print_loss_avg))
+            # print('%s (%d %d%%) %.4f' % (timeSince(start, iter / n_iters),
+            #                              iter, iter / n_iters * 100, print_loss_avg))
 
         if iter % plot_every == 0:
             plot_loss_avg = plot_loss_total / plot_every
@@ -771,7 +775,7 @@ hidden_size = 256
 encoder1 = EncoderRNN(input_lang.n_words, hidden_size).to(device)
 attn_decoder1 = AttnDecoderRNN(hidden_size, output_lang.n_words, dropout_p=0.1).to(device)
 
-trainIters(encoder1, attn_decoder1, 75000, print_every=5000)
+trainIters(encoder1, attn_decoder1, 1000, print_every=5)
 
 ######################################################################
 #
@@ -794,7 +798,7 @@ evaluateRandomly(encoder1, attn_decoder1)
 #
 
 output_words, attentions = evaluate(
-    encoder1, attn_decoder1, "je suis trop froid .")
+    encoder1, attn_decoder1, "however from the ethical point of view .")
 plt.matshow(attentions.numpy())
 
 
@@ -829,15 +833,8 @@ def evaluateAndShowAttention(input_sentence):
     print('output =', ' '.join(output_words))
     showAttention(input_sentence, output_words, attentions)
 
-
-evaluateAndShowAttention("elle a cinq ans de moins que moi .")
-
-evaluateAndShowAttention("elle est trop petit .")
-
-evaluateAndShowAttention("je ne crains pas de mourir .")
-
-evaluateAndShowAttention("c est un jeune directeur plein de talent .")
-
+evaluateAndShowAttention('however from the ethical point of view .') 
+evaluateAndShowAttention('we talk about the first possibility .') 
 
 ######################################################################
 # Exercises

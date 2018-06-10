@@ -10,8 +10,7 @@ import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
 
-MAX_LENGTH = 10
-
+from config import *
 
 class AttnDecoderRNN(nn.Module):
     def __init__(self, hidden_size, output_size, dropout_p=0.1, max_length=MAX_LENGTH):

@@ -16,11 +16,7 @@ from DecoderRNN import *
 from EncoderRNN import *
 from Lang import *
 from helper import *
-
-# device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
-device = torch.device("cpu")
-SOS_token = 0
-EOS_token = 1
+from config import *
 
 def loadConll(path='CoNLL_data/train.txt'):
     lines = open(path, encoding='utf-8').read().strip().split('\n')
@@ -35,13 +31,14 @@ def tensorFromSentence(lang, sentence):
     indexes.append(EOS_token)
     return torch.tensor(indexes, dtype=torch.long, device=device).view(-1, 1)
 
-def tensorsFromPair(pair):
+def tensorsFromPair(pair, if_elmo=True):
+    if if_elmo:
+        return pair
     input_tensor = tensorFromSentence(input_lang, pair[0])
     target_tensor = tensorFromSentence(output_lang, pair[1])
     return (input_tensor, target_tensor)
 
 def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, max_length=MAX_LENGTH):
-    
     encoder_hidden = encoder.initHidden()
 
     encoder_optimizer.zero_grad()
@@ -87,7 +84,7 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
 
     return loss.item() / target_length
 
-def trainIters(pairs, encoder, decoder, n_iters=75000, print_every=1000, plot_every=100, learning_rate=0.01):
+def trainIters(pairs, encoder, decoder, n_iters, print_every=1000, plot_every=100, learning_rate=0.01, if_elmo=True):
     start = time.time()
     plot_losses = []
     print_loss_total = 0  # Reset every print_every
@@ -95,8 +92,10 @@ def trainIters(pairs, encoder, decoder, n_iters=75000, print_every=1000, plot_ev
 
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
-    training_pairs = [tensorsFromPair(random.choice(pairs)) for i in range(n_iters)]
-    # training_pairs = [random.choice(pairs) for i in range(n_iters)]
+    # Text
+    # if_elmo = False
+    # Elmo embeddings
+    training_pairs = [tensorsFromPair(random.choice(pairs), if_elmo) for i in range(n_iters)]
 
     criterion = nn.NLLLoss()
 
@@ -128,17 +127,30 @@ def load_elmo_pairs(path):
         return pickle.load(elmo)
 
 if __name__ == '__main__':
-    input_lang, output_lang, pairs = prepareData('wrong', 'correct')
+    # path = 'CoNLL_data/train_baseline.txt'
+    # path = 'data/eng-fra.txt'
+    path = 'CoNLL_data/train.txt'
+    emb_path = 'CoNLL_data/train.elmo'
+
+    input_lang, output_lang, indices, pairs = prepareData(path, 'wrong', 'correct')
     print(random.choice(pairs))
 
-    # emb_path = 'CoNLL_data/train.elmo'
-    # input_lang = output_lang
-    # pairs = load_elmo_pairs(emb_path)
+    elmo_pairs = load_elmo_pairs(emb_path)
+    # print(len(elmo_pairs))
+    # print(indices)
+    pairs = [elmo_pairs[i] for i in indices]
+    # print(len(pairs))
+    # exit()
 
     teacher_forcing_ratio = 0.5
 
     hidden_size = 256
-    encoder = EncoderRNN(input_lang.n_words, hidden_size).to(device)
+    elmo_size = 1024
+    # elmo_size = pairs[0][0].size()[1]
+
+    # encoder = EncoderRNN(input_lang.n_words, hidden_size).to(device)
+    # elmo input
+    encoder = EncoderRNN(elmo_size, hidden_size).to(device)
     decoder = AttnDecoderRNN(hidden_size, output_lang.n_words, dropout_p=0.1).to(device)
 
-    trainIters(pairs, encoder, decoder, 75000, print_every=5000)
+    trainIters(pairs, encoder, decoder, 75000, print_every=5000, if_elmo=True)

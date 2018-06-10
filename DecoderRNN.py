@@ -3,7 +3,6 @@ import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
 
-
 class DecoderRNN(nn.Module):
     def __init__(self, hidden_size, output_size):
         super(DecoderRNN, self).__init__()

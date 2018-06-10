@@ -1,13 +1,27 @@
 # Need allennlp with torch==0.3.1 && GPU
 
-from allennlp.modules.elmo import Elmo, batch_to_ids
-from helper import *
 import pickle
+import re
+import unicodedata
+
+from allennlp.modules.elmo import Elmo, batch_to_ids
 
 options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json" 
 weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
 
 elmo = Elmo(options_file, weight_file, 2, dropout=0)
+
+def unicodeToAscii(s):
+    return ''.join(
+        c for c in unicodedata.normalize('NFD', s)
+        if unicodedata.category(c) != 'Mn'
+    )
+
+def normalizeString(s):
+    s = unicodeToAscii(s.lower().strip())
+    s = re.sub(r"([.!?])", r" \1", s)
+    s = re.sub(r"[^\-</>a-zA-Z.!?]+", r" ", s)
+    return s
 
 def loadConll(path='CoNLL_data/train.txt'):
     # Read the file and split into lines
@@ -30,7 +44,8 @@ if __name__ == '__main__':
     emb_path = 'CoNLL_data/train.elmo'
 
     # subset
-    pairs = loadConll()[:10]
+    # pairs = loadConll()[:10]
+    pairs = loadConll()
     # pairs = [[['First', 'sentence', '.'], ['Another', '.']]]
 
     embeddings = [elmoFromPair(pair) for pair in pairs]
