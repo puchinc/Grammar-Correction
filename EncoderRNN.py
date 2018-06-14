@@ -30,6 +30,8 @@ class EncoderRNN(nn.Module):
     def forward(self, input, hidden):
         # input of shape (seq_len, batch, input_size)
         # embedded = self.embedding(input).view(1, 1, -1)
+
+        # USE ELMO
         embedded = input.view(1, 1, -1)
 
         output = embedded

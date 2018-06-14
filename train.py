@@ -12,7 +12,6 @@ from torch import optim
 import torch.nn.functional as F
 
 from AttnDecoderRNN import *
-from DecoderRNN import *
 from EncoderRNN import *
 from Lang import *
 from helper import *
@@ -38,6 +37,11 @@ def tensorsFromPair(pair, if_elmo=True):
     target_tensor = tensorFromSentence(output_lang, pair[1])
     return (input_tensor, target_tensor)
 
+def tensorsFromElmoText(pair):
+    input_tensor = pair[0].to(device)
+    target_tensor = tensorFromSentence(output_lang, ' '.join(pair[1]))
+    return (input_tensor, target_tensor)
+
 def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, max_length=MAX_LENGTH):
     encoder_hidden = encoder.initHidden()
 
@@ -55,6 +59,7 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
         encoder_outputs[ei] = encoder_output[0, 0]
 
     decoder_input = torch.tensor([[SOS_token]], device=device) 
+    # decoder_input = SOS_token
     decoder_hidden = encoder_hidden 
     use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False 
     if use_teacher_forcing:
@@ -63,11 +68,12 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
             decoder_output, decoder_hidden, decoder_attention = decoder(
                 decoder_input, decoder_hidden, encoder_outputs)
             loss += criterion(decoder_output, target_tensor[di])
+            decoder_input = SOS_token
             decoder_input = target_tensor[di]  # Teacher forcing
 
     else:
         # Without teacher forcing: use its own predictions as the next input
-        for di in range(target_length):
+        for di in range(int(target_length/2)):
             decoder_output, decoder_hidden, decoder_attention = decoder(
                 decoder_input, decoder_hidden, encoder_outputs)
             topv, topi = decoder_output.topk(1)
@@ -95,7 +101,10 @@ def trainIters(pairs, encoder, decoder, n_iters, print_every=1000, plot_every=10
     # Text
     # if_elmo = False
     # Elmo embeddings
-    training_pairs = [tensorsFromPair(random.choice(pairs), if_elmo) for i in range(n_iters)]
+    # training_pairs = [tensorsFromPair(random.choice(pairs), if_elmo) for i in range(n_iters)]
+
+    # (Elmo, text) pair
+    training_pairs = [tensorsFromElmoText(random.choice(pairs)) for i in range(n_iters)]
 
     criterion = nn.NLLLoss()
 
@@ -127,30 +136,34 @@ def load_elmo_pairs(path):
         return pickle.load(elmo)
 
 if __name__ == '__main__':
-    # path = 'CoNLL_data/train_baseline.txt'
-    # path = 'data/eng-fra.txt'
-    path = 'CoNLL_data/train.txt'
-    emb_path = 'CoNLL_data/train.elmo'
 
-    input_lang, output_lang, indices, pairs = prepareData(path, 'wrong', 'correct')
+    # Small dataset
+    small = True
+    path = 'CoNLL_data/train.txt'
+    emb_path = 'CoNLL_data/train_small.elmo'
+
+    # Baseline
+    # small = False
+    # path = 'CoNLL_data/train_baseline.txt'
+    # emb_path = 'CoNLL_data/train_baseline.elmo'
+
+    # Add error tag
+    # path = 'CoNLL_data/train.txt'
+    # emb_path = 'CoNLL_data/train.elmo'
+
+    input_lang, output_lang, indices, pairs = prepareData(path, 'wrong', 'correct', small=small)
     print(random.choice(pairs))
 
     elmo_pairs = load_elmo_pairs(emb_path)
-    # print(len(elmo_pairs))
-    # print(indices)
     pairs = [elmo_pairs[i] for i in indices]
-    # print(len(pairs))
-    # exit()
 
     teacher_forcing_ratio = 0.5
 
     hidden_size = 256
     elmo_size = 1024
-    # elmo_size = pairs[0][0].size()[1]
 
-    # encoder = EncoderRNN(input_lang.n_words, hidden_size).to(device)
-    # elmo input
     encoder = EncoderRNN(elmo_size, hidden_size).to(device)
     decoder = AttnDecoderRNN(hidden_size, output_lang.n_words, dropout_p=0.1).to(device)
 
-    trainIters(pairs, encoder, decoder, 75000, print_every=5000, if_elmo=True)
+    # trainIters(pairs, encoder, decoder, 75000, print_every=5000, if_elmo=True)
+    trainIters(pairs, encoder, decoder, 100, print_every=5, if_elmo=True)

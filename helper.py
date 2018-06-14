@@ -58,10 +58,13 @@ def filterPairs(pairs):
     idx, pair = zip(*[(i, pair) for i, pair in enumerate(pairs) if filterPair(pair)]) 
     return list(idx), list(pair)
 
-def prepareData(path, lang1, lang2, reverse=False):
+def prepareData(path, lang1, lang2, reverse=False, small=False):
     input_lang, output_lang, pairs = readLangs(path, lang1, lang2, reverse)
     print("Read %s sentence pairs" % len(pairs))
-    indices, pairs = filterPairs(pairs)
+    if small:
+        indices = [i for i in range(10)]
+    else:
+        indices, pairs = filterPairs(pairs)
     print("Trimmed to %s sentence pairs" % len(pairs))
     print("Counting words...")
     for pair in pairs:

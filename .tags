@@ -5,7 +5,6 @@
 !_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
 !_TAG_PROGRAM_VERSION	5.8	//
 AttnDecoderRNN	AttnDecoderRNN.py	/^class AttnDecoderRNN(nn.Module):$/;"	c
-AttnDecoderRNN	AttnDecoderRNN.py	1;"	F
 AttnDecoderRNN	seq2seq.py	/^class AttnDecoderRNN(nn.Module):$/;"	c
 DecoderRNN	DecoderRNN.py	/^class DecoderRNN(nn.Module):$/;"	c
 DecoderRNN	DecoderRNN.py	1;"	F
@@ -13,13 +12,12 @@ DecoderRNN	seq2seq.py	/^class DecoderRNN(nn.Module):$/;"	c
 EOS_token	config.py	/^EOS_token = 1$/;"	v
 EOS_token	seq2seq.py	/^EOS_token = 1$/;"	v
 EncoderRNN	EncoderRNN.py	/^class EncoderRNN(nn.Module):$/;"	c
-EncoderRNN	EncoderRNN.py	1;"	F
 EncoderRNN	seq2seq.py	/^class EncoderRNN(nn.Module):$/;"	c
 Lang	Lang.py	/^class Lang:$/;"	c
 Lang	Lang.py	1;"	F
 Lang	seq2seq.py	/^class Lang:$/;"	c
-MAX_LENGTH	config.py	/^MAX_LENGTH = 10$/;"	v
-MAX_LENGTH	seq2seq.py	/^MAX_LENGTH = 10$/;"	v
+MAX_LENGTH	config.py	/^MAX_LENGTH = 100$/;"	v
+MAX_LENGTH	seq2seq.py	/^MAX_LENGTH = 12$/;"	v
 SOS_token	config.py	/^SOS_token = 0$/;"	v
 SOS_token	seq2seq.py	/^SOS_token = 0$/;"	v
 __init__	AttnDecoderRNN.py	/^    def __init__(self, hidden_size, output_size, dropout_p=0.1, max_length=MAX_LENGTH):$/;"	m	class:AttnDecoderRNN
@@ -37,13 +35,12 @@ addWord	seq2seq.py	/^    def addWord(self, word):$/;"	m	class:Lang
 asMinutes	helper.py	/^def asMinutes(s):$/;"	f
 asMinutes	seq2seq.py	/^def asMinutes(s):$/;"	f
 attn_decoder1	seq2seq.py	/^attn_decoder1 = AttnDecoderRNN(hidden_size, output_lang.n_words, dropout_p=0.1).to(device)$/;"	v
-config	config.py	1;"	F
-device	config.py	/^device = torch.device("cpu")$/;"	v
+device	config.py	/^device = torch.device("cuda" if torch.cuda.is_available() else "cpu")$/;"	v
 device	seq2seq.py	/^device = torch.device("cpu")$/;"	v
 elmo	elmo.py	/^elmo = Elmo(options_file, weight_file, 2, dropout=0)$/;"	v
 elmoFromPair	elmo.py	/^def elmoFromPair(pair):$/;"	f
 emb_path	elmo.py	/^    emb_path = 'CoNLL_data\/train.elmo'$/;"	v
-embeddings	elmo.py	/^    embeddings = [elmoFromPair(pair) for pair in pairs]$/;"	v
+embeddings	elmo.py	/^    embeddings = [[sen2elmo(pair[0]), pair[1]] for pair in pairs]$/;"	v
 encoder1	seq2seq.py	/^encoder1 = EncoderRNN(input_lang.n_words, hidden_size).to(device)$/;"	v
 eng_prefixes	seq2seq.py	/^eng_prefixes = ($/;"	v
 evaluate	evaluate.py	/^def evaluate(encoder, decoder, sentence, max_length=MAX_LENGTH):$/;"	f
@@ -79,13 +76,14 @@ normalizeString	elmo.py	/^def normalizeString(s):$/;"	f
 normalizeString	helper.py	/^def normalizeString(s):$/;"	f
 normalizeString	seq2seq.py	/^def normalizeString(s):$/;"	f
 options_file	elmo.py	/^options_file = "https:\/\/s3-us-west-2.amazonaws.com\/allennlp\/models\/elmo\/2x4096_512_2048cnn_2xhighway\/elmo_2x4096_512_2048cnn_2xhighway_options.json" $/;"	v
-pairs	elmo.py	/^    pairs = loadConll()$/;"	v
+pairs	elmo.py	/^    pairs = loadConll(path)$/;"	v
 parser	CoNLL_data/parser.py	1;"	F
-prepareData	helper.py	/^def prepareData(path, lang1, lang2, reverse=False):$/;"	f
+path	elmo.py	/^    path = 'CoNLL_data\/train.txt'$/;"	v
+prepareData	helper.py	/^def prepareData(path, lang1, lang2, reverse=False, small=False):$/;"	f
 prepareData	seq2seq.py	/^def prepareData(lang1, lang2, reverse=False):$/;"	f
 readLangs	helper.py	/^def readLangs(path, lang1, lang2, reverse=False):$/;"	f
 readLangs	seq2seq.py	/^def readLangs(lang1, lang2, reverse=False):$/;"	f
-seq2seq	seq2seq.py	1;"	F
+sen2elmo	elmo.py	/^def sen2elmo(sentence):$/;"	f
 showAttention	evaluate.py	/^def showAttention(input_sentence, output_words, attentions):$/;"	f
 showAttention	seq2seq.py	/^def showAttention(input_sentence, output_words, attentions):$/;"	f
 showPlot	helper.py	/^def showPlot(points):$/;"	f
@@ -93,6 +91,7 @@ showPlot	seq2seq.py	/^def showPlot(points):$/;"	f
 teacher_forcing_ratio	seq2seq.py	/^teacher_forcing_ratio = 0.5$/;"	v
 tensorFromSentence	seq2seq.py	/^def tensorFromSentence(lang, sentence):$/;"	f
 tensorFromSentence	train.py	/^def tensorFromSentence(lang, sentence):$/;"	f
+tensorsFromElmoText	train.py	/^def tensorsFromElmoText(pair):$/;"	f
 tensorsFromPair	seq2seq.py	/^def tensorsFromPair(pair):$/;"	f
 tensorsFromPair	train.py	/^def tensorsFromPair(pair, if_elmo=True):$/;"	f
 timeSince	helper.py	/^def timeSince(since, percent):$/;"	f

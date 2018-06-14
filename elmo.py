@@ -39,15 +39,31 @@ def elmoFromPair(pair):
     input_tensor, output_tensor = elmo(character_ids)['elmo_representations'][layer].data
     return (input_tensor, output_tensor)
 
+def sen2elmo(sentence):
+    layer = 1
+    character_ids = batch_to_ids(sentence)
+    tensor = elmo(character_ids)['elmo_representations'][layer][0].data
+    return tensor
+
 # input_lang, output_lang, pairs = prepareData('eng', 'fra', True)
 if __name__ == '__main__':
+    # TEST SMALL DATASET
+    # path = 'CoNLL_data/train.txt'
+    # emb_path = 'CoNLL_data/train_small.elmo'
+    # pairs = loadConll(path)[:10]
+
+    # BASELINE
+    # path = 'CoNLL_data/baseline_train.txt'
+    # emb_path = 'CoNLL_data/train_baseline.elmo'
+
+    # WITH ERROR TAG
+    path = 'CoNLL_data/train.txt'
     emb_path = 'CoNLL_data/train.elmo'
 
-    # subset
-    # pairs = loadConll()[:10]
-    pairs = loadConll()
     # pairs = [[['First', 'sentence', '.'], ['Another', '.']]]
+    pairs = loadConll(path)
 
-    embeddings = [elmoFromPair(pair) for pair in pairs]
+    # (elmo, text) pairs
+    embeddings = [[sen2elmo(pair[0]), pair[1]] for pair in pairs]
     with open(emb_path, 'wb') as file:
         pickle.dump(embeddings, file)
