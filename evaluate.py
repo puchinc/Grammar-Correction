@@ -10,8 +10,6 @@ import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
 
-
-
 def evaluate(encoder, decoder, sentence, max_length=MAX_LENGTH):
     with torch.no_grad():
         input_tensor = tensorFromSentence(input_lang, sentence)
@@ -58,10 +56,7 @@ def evaluateRandomly(encoder, decoder, n=10):
         print('<', output_sentence)
         print('')
 
-
-
 evaluateRandomly(encoder1, attn_decoder1)
-
 
 ######################################################################
 # Visualizing Attention

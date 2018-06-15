@@ -1,0 +1,4 @@
+CoNLL_data/train.elmo.pair
+CoNLL_data/train_baseline.elmo.pair
+CoNLL_data/train.elmo
+data/

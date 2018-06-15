@@ -37,7 +37,7 @@ def tensorsFromPair(pair, if_elmo=True):
     target_tensor = tensorFromSentence(output_lang, pair[1])
     return (input_tensor, target_tensor)
 
-def tensorsFromElmoText(pair):
+def tensorsFromElmoText(pair, output_lang):
     input_tensor = pair[0].to(device)
     target_tensor = tensorFromSentence(output_lang, ' '.join(pair[1]))
     return (input_tensor, target_tensor)
@@ -68,7 +68,6 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
             decoder_output, decoder_hidden, decoder_attention = decoder(
                 decoder_input, decoder_hidden, encoder_outputs)
             loss += criterion(decoder_output, target_tensor[di])
-            decoder_input = SOS_token
             decoder_input = target_tensor[di]  # Teacher forcing
 
     else:
@@ -90,7 +89,7 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
 
     return loss.item() / target_length
 
-def trainIters(pairs, encoder, decoder, n_iters, print_every=1000, plot_every=100, learning_rate=0.01, if_elmo=True):
+def trainIters(training_pairs, encoder, decoder, n_iters, encoder_path, decoder_path, print_every=1000, plot_every=100, learning_rate=0.01):
     start = time.time()
     plot_losses = []
     print_loss_total = 0  # Reset every print_every
@@ -98,13 +97,6 @@ def trainIters(pairs, encoder, decoder, n_iters, print_every=1000, plot_every=10
 
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
-    # Text
-    # if_elmo = False
-    # Elmo embeddings
-    # training_pairs = [tensorsFromPair(random.choice(pairs), if_elmo) for i in range(n_iters)]
-
-    # (Elmo, text) pair
-    training_pairs = [tensorsFromElmoText(random.choice(pairs)) for i in range(n_iters)]
 
     criterion = nn.NLLLoss()
 
@@ -121,6 +113,9 @@ def trainIters(pairs, encoder, decoder, n_iters, print_every=1000, plot_every=10
         if iter % print_every == 0:
             print_loss_avg = print_loss_total / print_every
             print_loss_total = 0
+            torch.save(encoder.state_dict(), encoder_path)
+            torch.save(decoder.state_dict(), decoder_path)
+
             print('%s (%d %d%%) %.4f' % (timeSince(start, iter / n_iters),
                                          iter, iter / n_iters * 100, print_loss_avg))
 
@@ -136,34 +131,26 @@ def load_elmo_pairs(path):
         return pickle.load(elmo)
 
 if __name__ == '__main__':
-
-    # Small dataset
-    small = True
-    path = 'CoNLL_data/train.txt'
-    emb_path = 'CoNLL_data/train_small.elmo'
-
-    # Baseline
-    # small = False
-    # path = 'CoNLL_data/train_baseline.txt'
-    # emb_path = 'CoNLL_data/train_baseline.elmo'
-
-    # Add error tag
-    # path = 'CoNLL_data/train.txt'
-    # emb_path = 'CoNLL_data/train.elmo'
-
     input_lang, output_lang, indices, pairs = prepareData(path, 'wrong', 'correct', small=small)
     print(random.choice(pairs))
 
     elmo_pairs = load_elmo_pairs(emb_path)
     pairs = [elmo_pairs[i] for i in indices]
-
-    teacher_forcing_ratio = 0.5
-
-    hidden_size = 256
-    elmo_size = 1024
-
+    training_pairs = [tensorsFromElmoText(random.choice(pairs), output_lang) for i in range(n_iters)]
+    
     encoder = EncoderRNN(elmo_size, hidden_size).to(device)
     decoder = AttnDecoderRNN(hidden_size, output_lang.n_words, dropout_p=0.1).to(device)
 
-    # trainIters(pairs, encoder, decoder, 75000, print_every=5000, if_elmo=True)
-    trainIters(pairs, encoder, decoder, 100, print_every=5, if_elmo=True)
+    if os.path.isfile(encoder_path) and os.path.isfile(decoder_path):
+        if torch.cuda.is_available():
+            encoder.load_state_dict(torch.load(encoder_path))
+            decoder.load_state_dict(torch.load(decoder_path))
+        # use cpu to load gpu trained models
+        else:
+            encoder.load_state_dict(torch.load(encoder_path,
+                    map_location=lambda storage, loc: storage))
+            decoder.load_state_dict(torch.load(decoder_path, 
+                    map_location=lambda storage, loc: storage))
+
+    trainIters(training_pairs, encoder, decoder, n_iters, encoder_path, 
+            decoder_path, print_every=print_every)
