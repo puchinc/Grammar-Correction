@@ -1,5 +1,7 @@
 from __future__ import unicode_literals, print_function, division
 from io import open
+import sys
+import os
 import unicodedata
 import string
 import re
@@ -59,7 +61,7 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
         encoder_outputs[ei] = encoder_output[0, 0]
 
     decoder_input = torch.tensor([[SOS_token]], device=device) 
-    # decoder_input = SOS_token
+    # decoder_input = torch.zeros([1, 1024], device=device)
     decoder_hidden = encoder_hidden 
     use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False 
     if use_teacher_forcing:
@@ -67,6 +69,7 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
         for di in range(target_length):
             decoder_output, decoder_hidden, decoder_attention = decoder(
                 decoder_input, decoder_hidden, encoder_outputs)
+
             loss += criterion(decoder_output, target_tensor[di])
             decoder_input = target_tensor[di]  # Teacher forcing
 
@@ -131,15 +134,38 @@ def load_elmo_pairs(path):
         return pickle.load(elmo)
 
 if __name__ == '__main__':
-    input_lang, output_lang, indices, pairs = prepareData(path, 'wrong', 'correct', small=small)
+    # python train.py encoder.model decoder.model train.txt train.elmo 
+    if len(sys.argv) == 4:
+        encoder_path = sys.argv[1]
+        decoder_path = sys.argv[2]
+        sentence_path = sys.argv[3]
+        emb_path = sys.argv[4]
+
+    # Small dataset
+    else:
+        small = True
+        encoder_path = 'models/with_error_tag.encoder'
+        decoder_path = 'models/with_error_tag.decoder'
+        sentence_path = 'CoNLL_data/train.txt'
+        emb_path = 'CoNLL_data/train_small.elmo'
+
+    # Absolute path
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    encoder_path = os.path.join(dir_path, encoder_path)
+    decoder_path = os.path.join(dir_path, decoder_path)
+    sentence_path = os.path.join(dir_path, sentence_path)
+    emb_path = os.path.join(dir_path, emb_path)
+
+    input_lang, output_lang, indices, pairs = prepareData(sentence_path, 'wrong', 'correct', small=small)
     print(random.choice(pairs))
 
     elmo_pairs = load_elmo_pairs(emb_path)
     pairs = [elmo_pairs[i] for i in indices]
     training_pairs = [tensorsFromElmoText(random.choice(pairs), output_lang) for i in range(n_iters)]
+    # training_pairs = [random.choice(pairs) for i in range(n_iters)]
     
     encoder = EncoderRNN(elmo_size, hidden_size).to(device)
-    decoder = AttnDecoderRNN(hidden_size, output_lang.n_words, dropout_p=0.1).to(device)
+    decoder = AttnDecoderRNN(hidden_size, output_lang.n_words).to(device)
 
     if os.path.isfile(encoder_path) and os.path.isfile(decoder_path):
         if torch.cuda.is_available():

@@ -56,8 +56,6 @@ def evaluateRandomly(encoder, decoder, n=10):
         print('<', output_sentence)
         print('')
 
-evaluateRandomly(encoder1, attn_decoder1)
-
 ######################################################################
 # Visualizing Attention
 # ---------------------
@@ -71,10 +69,6 @@ evaluateRandomly(encoder1, attn_decoder1)
 # displayed as a matrix, with the columns being input steps and rows being
 # output steps:
 #
-
-output_words, attentions = evaluate(
-    encoder1, attn_decoder1, "je suis trop froid .")
-plt.matshow(attentions.numpy())
 
 
 ######################################################################
@@ -100,7 +94,6 @@ def showAttention(input_sentence, output_words, attentions):
 
     plt.show()
 
-
 def evaluateAndShowAttention(input_sentence):
     output_words, attentions = evaluate(
         encoder1, attn_decoder1, input_sentence)
@@ -108,11 +101,14 @@ def evaluateAndShowAttention(input_sentence):
     print('output =', ' '.join(output_words))
     showAttention(input_sentence, output_words, attentions)
 
+if __name__ == '__main__':
+    evaluateRandomly(encoder1, attn_decoder1)
 
-evaluateAndShowAttention("elle a cinq ans de moins que moi .")
+    output_words, attentions = evaluate(
+        encoder1, attn_decoder1, "in conclusion i think that surveilence technology should not be allowed to be used to track people .")
+    plt.matshow(attentions.numpy())
 
-evaluateAndShowAttention("elle est trop petit .")
-
-evaluateAndShowAttention("je ne crains pas de mourir .")
-
-evaluateAndShowAttention("c est un jeune directeur plein de talent .")
+    evaluateAndShowAttention("the son was died after one year s treatment and the couple got divorced later after that .")
+    evaluateAndShowAttention("after got that the woman carried the disease gene instead of the man .")
+    evaluateAndShowAttention('in the in many countries .')
+    evaluateAndShowAttention('here red thing marriage and white means someone passing away .')
