@@ -1,4 +1,4 @@
-## CS249 Final Project
+## Seq2seq Neural Grammar Correction
 
 ### Goal
 
