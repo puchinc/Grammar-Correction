@@ -16,10 +16,17 @@ You need two virtualenvs, one for elmo embedding, and the other for machine tran
 * allennlp
 
         pip install allennlp
-        pip install 
 
 [NMT] https://pytorch.org/tutorials/intermediate/seq2seq_translation_tutorial.html
 * torch
 
-        pip3 install http://download.pytorch.org/whl/cu91/torch-0.4.0-cp36-cp36m-linux_x86_64.whl 
+        pip3 install torch==0.4.0 
         pip3 install torchvision
+
+### Script
+
+```
+bash grammar.sh --encoder models/with_error_tag.encoder \
+    --decoder models/with_error_tag.decoder \
+    --sentences CoNLL_data/train.txt --emb CoNLL_data/train_small.elmo
+```
