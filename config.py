@@ -35,7 +35,5 @@ MAX_LENGTH = 100
 ### TRAIN ###
 teacher_forcing_ratio = 0.5
 
-# print_every = 1000
-# n_iters = 75000
-print_every = 5
-n_iters = 100
+print_every = 100
+n_iters = 2000
