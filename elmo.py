@@ -42,7 +42,8 @@ def sen2elmo(sentence, elmo):
 # input_lang, output_lang, pairs = prepareData('eng', 'fra', True)
 if __name__ == '__main__':
     # python elmo.py train.txt train.elmo 
-    if len(sys.argv) == 2:
+    
+    if len(sys.argv) == 3:
         sentence_path = sys.argv[1]
         emb_path = sys.argv[2]
     else:
@@ -54,7 +55,7 @@ if __name__ == '__main__':
     # no need to pretrain again
     if os.path.isfile(emb_path): 
         exit()
-
+    
     from allennlp.modules.elmo import Elmo, batch_to_ids
     options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json" 
     weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"

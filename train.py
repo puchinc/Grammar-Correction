@@ -135,12 +135,12 @@ def load_elmo_pairs(path):
 
 if __name__ == '__main__':
     # python train.py encoder.model decoder.model train.txt train.elmo 
-    if len(sys.argv) == 4:
+    small = False
+    if len(sys.argv) == 5:
         encoder_path = sys.argv[1]
         decoder_path = sys.argv[2]
         sentence_path = sys.argv[3]
         emb_path = sys.argv[4]
-
     # Small dataset
     else:
         small = True
@@ -148,7 +148,6 @@ if __name__ == '__main__':
         decoder_path = 'models/with_error_tag.decoder'
         sentence_path = 'CoNLL_data/train.txt'
         emb_path = 'CoNLL_data/train_small.elmo'
-
     # Absolute path
     dir_path = os.path.dirname(os.path.realpath(__file__))
     encoder_path = os.path.join(dir_path, encoder_path)
@@ -177,6 +176,6 @@ if __name__ == '__main__':
                     map_location=lambda storage, loc: storage))
             decoder.load_state_dict(torch.load(decoder_path, 
                     map_location=lambda storage, loc: storage))
-
+    
     trainIters(training_pairs, encoder, decoder, n_iters, encoder_path, 
             decoder_path, print_every=print_every)

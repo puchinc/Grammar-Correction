@@ -20,7 +20,7 @@ You need two virtualenvs named allennlp and torch. allennlp is for elmo embeddin
 [NMT] https://pytorch.org/tutorials/intermediate/seq2seq_translation_tutorial.html
 * torch
 
-	pip install matplotlib
+        pip install matplotlib
         pip install torch==0.4.0 
         pip install torchvision
 
