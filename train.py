@@ -143,11 +143,12 @@ if __name__ == '__main__':
         emb_path = sys.argv[4]
     # Small dataset
     else:
-        small = True
         encoder_path = 'models/with_error_tag.encoder'
         decoder_path = 'models/with_error_tag.decoder'
         sentence_path = 'CoNLL_data/train.txt'
         emb_path = 'CoNLL_data/train_small.elmo'
+    if emb_path == 'CoNLL_data/train_small.elmo':
+        small = True
     # Absolute path
     dir_path = os.path.dirname(os.path.realpath(__file__))
     encoder_path = os.path.join(dir_path, encoder_path)
