@@ -4,13 +4,19 @@ import unicodedata
 import string
 import re
 import random
+import sys
 
 import torch
 import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
 
-def evaluate(encoder, decoder, sentence, max_length=MAX_LENGTH):
+from AttnDecoderRNN import *
+from EncoderRNN import *
+from config import *
+from helper import *
+
+def evaluate(encoder, decoder, sentence, input_lang, max_length=MAX_LENGTH):
     with torch.no_grad():
         input_tensor = tensorFromSentence(input_lang, sentence)
         input_length = input_tensor.size()[0]
@@ -46,12 +52,12 @@ def evaluate(encoder, decoder, sentence, max_length=MAX_LENGTH):
         return decoded_words, decoder_attentions[:di + 1]
 
 
-def evaluateRandomly(encoder, decoder, n=10):
+def evaluateRandomly(encoder, decoder, sentence_pairs, elmo_pairs, input_lang, n=10):
     for i in range(n):
-        pair = random.choice(pairs)
-        print('>', pair[0])
-        print('=', pair[1])
-        output_words, attentions = evaluate(encoder, decoder, pair[0])
+        sentence_pair = random.choice(sentence_pairs)
+        print('>', sentence_pair[0])
+        print('=', sentence_pair[1])
+        output_words, attentions = evaluate(encoder, decoder, sentence_pair[0], input_lang)
         output_sentence = ' '.join(output_words)
         print('<', output_sentence)
         print('')
@@ -101,14 +107,3 @@ def evaluateAndShowAttention(input_sentence):
     print('output =', ' '.join(output_words))
     showAttention(input_sentence, output_words, attentions)
 
-if __name__ == '__main__':
-    evaluateRandomly(encoder1, attn_decoder1)
-
-    output_words, attentions = evaluate(
-        encoder1, attn_decoder1, "in conclusion i think that surveilence technology should not be allowed to be used to track people .")
-    plt.matshow(attentions.numpy())
-
-    evaluateAndShowAttention("the son was died after one year s treatment and the couple got divorced later after that .")
-    evaluateAndShowAttention("after got that the woman carried the disease gene instead of the man .")
-    evaluateAndShowAttention('in the in many countries .')
-    evaluateAndShowAttention('here red thing marriage and white means someone passing away .')

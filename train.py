@@ -18,31 +18,7 @@ from EncoderRNN import *
 from Lang import *
 from helper import *
 from config import *
-
-def loadConll(path='CoNLL_data/train.txt'):
-    lines = open(path, encoding='utf-8').read().strip().split('\n')
-    pairs = [[[e for e in normalizeString(s).split(' ')] for s in l.split('\t')] for l in lines]
-    return pairs
-
-def indexesFromSentence(lang, sentence):
-    return [lang.word2index[word] for word in sentence.split(' ')]
-
-def tensorFromSentence(lang, sentence):
-    indexes = indexesFromSentence(lang, sentence)
-    indexes.append(EOS_token)
-    return torch.tensor(indexes, dtype=torch.long, device=device).view(-1, 1)
-
-def tensorsFromPair(pair, if_elmo=True):
-    if if_elmo:
-        return pair
-    input_tensor = tensorFromSentence(input_lang, pair[0])
-    target_tensor = tensorFromSentence(output_lang, pair[1])
-    return (input_tensor, target_tensor)
-
-def tensorsFromElmoText(pair, output_lang):
-    input_tensor = pair[0].to(device)
-    target_tensor = tensorFromSentence(output_lang, ' '.join(pair[1]))
-    return (input_tensor, target_tensor)
+from evaluate import *
 
 def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, max_length=MAX_LENGTH):
     encoder_hidden = encoder.initHidden()
@@ -159,11 +135,15 @@ if __name__ == '__main__':
     input_lang, output_lang, indices, pairs = prepareData(sentence_path, 'wrong', 'correct', small=small)
     print(random.choice(pairs))
 
+    sentence_pairs = pairs
+
     elmo_pairs = load_elmo_pairs(emb_path)
     pairs = [elmo_pairs[i] for i in indices]
-    training_pairs = [tensorsFromElmoText(random.choice(pairs), output_lang) for i in range(n_iters)]
-    # training_pairs = [random.choice(pairs) for i in range(n_iters)]
     
+    if small == True:
+        training_pairs = [tensorsFromElmoText(random.choice(pairs), output_lang) for i in range(n_iters)]
+    else:
+        training_pairs = [random.choice(pairs) for i in range(n_iters)]
     encoder = EncoderRNN(elmo_size, hidden_size).to(device)
     decoder = AttnDecoderRNN(hidden_size, output_lang.n_words).to(device)
 
@@ -180,3 +160,6 @@ if __name__ == '__main__':
     
     trainIters(training_pairs, encoder, decoder, n_iters, encoder_path, 
             decoder_path, print_every=print_every)
+    
+    # evaluate
+    # evaluateRandomly(encoder, decoder, sentence_pairs, pairs, input_lang)

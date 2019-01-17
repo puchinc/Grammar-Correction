@@ -108,3 +108,27 @@ def showPlot(points):
     ax.yaxis.set_major_locator(loc)
     plt.plot(points)
 
+def loadConll(path='CoNLL_data/train.txt'):
+    lines = open(path, encoding='utf-8').read().strip().split('\n')
+    pairs = [[[e for e in normalizeString(s).split(' ')] for s in l.split('\t')] for l in lines]
+    return pairs
+
+def indexesFromSentence(lang, sentence):
+    return [lang.word2index[word] for word in sentence.split(' ')]
+
+def tensorFromSentence(lang, sentence):
+    indexes = indexesFromSentence(lang, sentence)
+    indexes.append(EOS_token)
+    return torch.tensor(indexes, dtype=torch.long, device=device).view(-1, 1)
+
+def tensorsFromPair(pair, if_elmo=True):
+    if if_elmo:
+        return pair
+    input_tensor = tensorFromSentence(input_lang, pair[0])
+    target_tensor = tensorFromSentence(output_lang, pair[1])
+    return (input_tensor, target_tensor)
+
+def tensorsFromElmoText(pair, output_lang):
+    input_tensor = pair[0].to(device)
+    target_tensor = tensorFromSentence(output_lang, ' '.join(pair[1]))
+    return (input_tensor, target_tensor)
