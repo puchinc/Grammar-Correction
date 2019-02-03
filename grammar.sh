@@ -1,5 +1,5 @@
 #!/bin/bash
-#bash grammar.sh --encoder models/with_error_tag.encoder \
+# bash grammar.sh --encoder models/with_error_tag.encoder \
 #    --decoder models/with_error_tag.decoder \
 #    --sentences CoNLL_data/train.txt --emb CoNLL_data/train_small.elmo
 
@@ -42,17 +42,13 @@ done
 set - "${POSITIONAL[@]}" # restore positional parameters
 
 # train
-source ../allennlp/bin/activate
-python elmo.py $SENTENCES $EMB
-deactivate
+if [[ $EMB == *"elmo"* ]]; then
+    source ../allennlp/bin/activate
+    python elmo.py $SENTENCES $EMB
+    deactivate
+fi
 
 source ../torch/bin/activate
 python train.py $ENCODER $DECODER $SENTENCES $EMB
 deactivate
 
-#echo $ENCODER
-#echo $DECODER
-#echo $SENTENCES
-#echo $EMB
-
-# test
