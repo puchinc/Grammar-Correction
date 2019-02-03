@@ -30,9 +30,7 @@ def readLangs(path, lang1, lang2, reverse=False):
 
     # Read the file and split into lines
     lines = open(path, encoding='utf-8').read().strip().split('\n')
-    # lines = open('data/%s-%s.txt' % (lang1, lang2), encoding='utf-8').\
-    #     read().strip().split('\n')
-
+   
     # Split every line into pairs and normalize
     pairs = [[normalizeString(s) for s in l.split('\t')] for l in lines]
 
@@ -50,9 +48,6 @@ def readLangs(path, lang1, lang2, reverse=False):
 def filterPair(p):
     return len(p[0].split(' ')) < MAX_LENGTH and \
         len(p[1].split(' ')) < MAX_LENGTH 
-    # return len(p[0].split(' ')) < MAX_LENGTH and \
-    #     len(p[1].split(' ')) < MAX_LENGTH and \
-    #     p[1].startswith(eng_prefixes)
 
 def filterPairs(pairs):
     idx, pair = zip(*[(i, pair) for i, pair in enumerate(pairs) if filterPair(pair)]) 
@@ -121,9 +116,9 @@ def tensorFromSentence(lang, sentence):
     indexes.append(EOS_token)
     return torch.tensor(indexes, dtype=torch.long, device=device).view(-1, 1)
 
-def tensorsFromPair(pair, if_elmo=True):
-    if if_elmo:
-        return pair
+def tensorsFromPair(pair, input_lang, output_lang, if_elmo=True):
+    #if if_elmo:
+    #    return pair
     input_tensor = tensorFromSentence(input_lang, pair[0])
     target_tensor = tensorFromSentence(output_lang, pair[1])
     return (input_tensor, target_tensor)

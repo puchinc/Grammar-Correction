@@ -28,7 +28,7 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
 
     input_length = input_tensor.size(0)
     target_length = target_tensor.size(0)
-
+    
     encoder_outputs = torch.zeros(max_length, encoder.hidden_size, device=device) 
     loss = 0 
     for ei in range(input_length):
@@ -48,7 +48,6 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
 
             loss += criterion(decoder_output, target_tensor[di])
             decoder_input = target_tensor[di]  # Teacher forcing
-
     else:
         # Without teacher forcing: use its own predictions as the next input
         for di in range(int(target_length/2)):
@@ -56,7 +55,6 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
                 decoder_input, decoder_hidden, encoder_outputs)
             topv, topi = decoder_output.topk(1)
             decoder_input = topi.squeeze().detach()  # detach from history as input
-
             loss += criterion(decoder_output, target_tensor[di])
             if decoder_input.item() == EOS_token:
                 break
@@ -105,13 +103,20 @@ def trainIters(training_pairs, encoder, decoder, n_iters, encoder_path, decoder_
 
     showPlot(plot_losses)
 
+def tensorsToDevice(pair):
+    input_tensor = pair[0].to(device)
+    target_tensor = pair[1].to(device)
+    return (input_tensor, target_tensor)
+
 def load_elmo_pairs(path):
     with open(path, 'rb') as elmo:
         return pickle.load(elmo)
 
 if __name__ == '__main__':
-    # python train.py encoder.model decoder.model train.txt train.elmo 
+    # python train.py encoder.model decoder.model train.txt train.elmo
+    # python train.py encoder.model decoder.model train.txt nn.embedding 
     small = False
+    nn_embedding = False
     if len(sys.argv) == 5:
         encoder_path = sys.argv[1]
         decoder_path = sys.argv[2]
@@ -123,8 +128,10 @@ if __name__ == '__main__':
         decoder_path = 'models/with_error_tag.decoder'
         sentence_path = 'CoNLL_data/train.txt'
         emb_path = 'CoNLL_data/train_small.elmo'
-    if emb_path == 'CoNLL_data/train_small.elmo':
+    if emb_path == 'CoNLL_data/train_small.elmo' or emb_path == 'CoNLL_data/train_small.elmo.pair':
         small = True
+    elif emb_path == 'nn.embedding':
+        nn_embedding = True 
     # Absolute path
     dir_path = os.path.dirname(os.path.realpath(__file__))
     encoder_path = os.path.join(dir_path, encoder_path)
@@ -135,18 +142,25 @@ if __name__ == '__main__':
     input_lang, output_lang, indices, pairs = prepareData(sentence_path, 'wrong', 'correct', small=small)
     print(random.choice(pairs))
 
-    sentence_pairs = pairs
-
-    elmo_pairs = load_elmo_pairs(emb_path)
-    pairs = [elmo_pairs[i] for i in indices]
-    
-    if small == True:
+    sentence_pairs = pairs    
+    if 'elmo' in emb_path:
+        elmo_pairs = load_elmo_pairs(emb_path)
+        pairs = [elmo_pairs[i] for i in indices]
+    if nn_embedding:
+        training_pairs = [tensorsFromPair(random.choice(sentence_pairs), input_lang, output_lang) for i in range(n_iters)]
+    elif small == True:
         training_pairs = [tensorsFromElmoText(random.choice(pairs), output_lang) for i in range(n_iters)]
     else:
-        training_pairs = [random.choice(pairs) for i in range(n_iters)]
-    encoder = EncoderRNN(elmo_size, hidden_size).to(device)
+    	training_pairs = [tensorsToDevice(random.choice(pairs)) for i in range(n_iters)]
+        #training_pairs = [random.choice(pairs).to(device) for i in range(n_iters)]
+    if nn_embedding:
+        # use nn.embedding
+        encoder = EncoderRNN(input_lang.n_words, hidden_size, 'nn.embedding').to(device)
+    else:
+        # use elmo embedding
+        encoder = EncoderRNN(elmo_size, hidden_size).to(device)
     decoder = AttnDecoderRNN(hidden_size, output_lang.n_words).to(device)
-
+    ''' 
     if os.path.isfile(encoder_path) and os.path.isfile(decoder_path):
         if torch.cuda.is_available():
             encoder.load_state_dict(torch.load(encoder_path))
@@ -157,9 +171,12 @@ if __name__ == '__main__':
                     map_location=lambda storage, loc: storage))
             decoder.load_state_dict(torch.load(decoder_path, 
                     map_location=lambda storage, loc: storage))
-    
+    '''
     trainIters(training_pairs, encoder, decoder, n_iters, encoder_path, 
             decoder_path, print_every=print_every)
     
     # evaluate
-    # evaluateRandomly(encoder, decoder, sentence_pairs, pairs, input_lang)
+    # evaluateRandomly(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang)
+    # evaluateAndShowAttention(encoder, decoder, 'here i want to share forest view on this issue .', input_lang, output_lang, max_length=MAX_LENGTH)
+
+

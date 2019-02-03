@@ -16,12 +16,11 @@ from EncoderRNN import *
 from config import *
 from helper import *
 
-def evaluate(encoder, decoder, sentence, input_lang, max_length=MAX_LENGTH):
+def evaluate(encoder, decoder, sentence, input_lang, output_lang,  max_length=MAX_LENGTH):
     with torch.no_grad():
         input_tensor = tensorFromSentence(input_lang, sentence)
         input_length = input_tensor.size()[0]
         encoder_hidden = encoder.initHidden()
-
         encoder_outputs = torch.zeros(max_length, encoder.hidden_size, device=device)
 
         for ei in range(input_length):
@@ -30,12 +29,11 @@ def evaluate(encoder, decoder, sentence, input_lang, max_length=MAX_LENGTH):
             encoder_outputs[ei] += encoder_output[0, 0]
 
         decoder_input = torch.tensor([[SOS_token]], device=device)  # SOS
-
+        
         decoder_hidden = encoder_hidden
 
         decoded_words = []
         decoder_attentions = torch.zeros(max_length, max_length)
-
         for di in range(max_length):
             decoder_output, decoder_hidden, decoder_attention = decoder(
                 decoder_input, decoder_hidden, encoder_outputs)
@@ -52,35 +50,15 @@ def evaluate(encoder, decoder, sentence, input_lang, max_length=MAX_LENGTH):
         return decoded_words, decoder_attentions[:di + 1]
 
 
-def evaluateRandomly(encoder, decoder, sentence_pairs, elmo_pairs, input_lang, n=10):
+def evaluateRandomly(encoder, decoder, sentence_pairs, elmo_pairs, input_lang, output_lang, n=10):
     for i in range(n):
         sentence_pair = random.choice(sentence_pairs)
         print('>', sentence_pair[0])
         print('=', sentence_pair[1])
-        output_words, attentions = evaluate(encoder, decoder, sentence_pair[0], input_lang)
+        output_words, attentions = evaluate(encoder, decoder, sentence_pair[0], input_lang, output_lang)
         output_sentence = ' '.join(output_words)
         print('<', output_sentence)
         print('')
-
-######################################################################
-# Visualizing Attention
-# ---------------------
-#
-# A useful property of the attention mechanism is its highly interpretable
-# outputs. Because it is used to weight specific encoder outputs of the
-# input sequence, we can imagine looking where the network is focused most
-# at each time step.
-#
-# You could simply run ``plt.matshow(attentions)`` to see attention output
-# displayed as a matrix, with the columns being input steps and rows being
-# output steps:
-#
-
-
-######################################################################
-# For a better viewing experience we will do the extra work of adding axes
-# and labels:
-#
 
 def showAttention(input_sentence, output_words, attentions):
     # Set up figure with colorbar
@@ -100,10 +78,9 @@ def showAttention(input_sentence, output_words, attentions):
 
     plt.show()
 
-def evaluateAndShowAttention(input_sentence):
-    output_words, attentions = evaluate(
-        encoder1, attn_decoder1, input_sentence)
-    print('input =', input_sentence)
+def evaluateAndShowAttention(encoder, decoder, sentence, input_lang, output_lang,  max_length=MAX_LENGTH):
+    output_words, attentions = evaluate(encoder, decoder, sentence, input_lang, output_lang,  max_length=MAX_LENGTH)
+    print('input =', sentence)
     print('output =', ' '.join(output_words))
-    showAttention(input_sentence, output_words, attentions)
+    showAttention(sentence, output_words, attentions)
 

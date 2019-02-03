@@ -13,17 +13,27 @@ import torch.nn.functional as F
 from config import *
 
 class EncoderRNN(nn.Module):
-    def __init__(self, input_size, hidden_size):
+    def __init__(self, input_size, hidden_size, embedding_type='default'):
         super(EncoderRNN, self).__init__()
         self.hidden_size = hidden_size
-
-        # Elmo embedding
-        self.gru = nn.GRU(input_size, hidden_size)
+        
+        self.embedding_type = embedding_type
+        
+        if self.embedding_type == 'nn.embedding':
+            # use nn.embedding
+            self.embedding = nn.Embedding(input_size, hidden_size)
+            self.gru = nn.GRU(hidden_size, hidden_size)
+        else:
+            # use ELMo embedding
+            self.gru = nn.GRU(input_size, hidden_size)
 
     def forward(self, input, hidden):
-        # USE ELMO
-        embedded = input.view(1, 1, -1)
-
+        if self.embedding_type == 'nn.embedding':
+            # use nn.embedding
+            embedded = self.embedding(input).view(1, 1, -1)
+        else:
+            # use ELMo embedding
+            embedded = input.view(1, 1, -1)
         output = embedded
         output, hidden = self.gru(output, hidden)
         return output, hidden
