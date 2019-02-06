@@ -2,7 +2,7 @@
 
 # This script parses lang-8 data file (lang-8-20111007-L1-v2.dat) and write to a new file with the format: learner_sentence \t corrected_sentence \n
 # reference: https://github.com/nusnlp/mlconvgec2018/blob/master/data/scripts/lang-8_scripts/extract.py
-# example usage: python lang8_parser.py -i lang-8-20111007-L1-v2.dat -o lang8_parsed -l2 English 
+# example usage: python lang8_parser.py -i lang-8-20111007-L1-v2.dat -o data/lang8_parsed -l2 English 
 # parsed file will be on lab machine 
 
 import argparse

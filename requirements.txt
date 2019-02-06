@@ -1,0 +1,4 @@
+allennlp
+matplotlib
+torch==0.4.0
+torchvision

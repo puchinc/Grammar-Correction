@@ -2,3 +2,4 @@ data/
 __pycache__/
 .rsync_exclude
 .exrc
+.DS_Store

@@ -1,7 +1,13 @@
 #!/bin/bash
-# bash grammar.sh --encoder models/with_error_tag.encoder \
-#    --decoder models/with_error_tag.decoder \
-#    --sentences CoNLL_data/train.txt --emb CoNLL_data/train_small.elmo
+
+# TODO
+# use python train.py rather than bash
+
+# bash grammar.sh \
+#    --emb data/CoNLL_data/train_small.elmo \
+#    --encoder data/models/with_error_tag.encoder \
+#    --decoder data/models/with_error_tag.decoder \
+#    --sentences data/CoNLL_data/train.txt          
 
 POSITIONAL=()
 while [[ $# -gt 0 ]]
@@ -41,14 +47,52 @@ esac
 done
 set - "${POSITIONAL[@]}" # restore positional parameters
 
-# train
-if [[ $EMB == *"elmo"* ]]; then
-    source ../allennlp/bin/activate
-    python elmo.py $SENTENCES $EMB
-    deactivate
+# check null
+if [ -z $ENCODER ]; then 
+    echo "Missing Arguments"
+    exit 1
+fi
+if [ -z $DECODER ]; then 
+    echo "Missing Arguments"
+    exit 1
+fi
+if [ -z $SENTENCES ]; then 
+    echo "Missing Arguments"
+    exit 1
+fi
+if [ -z $EMB ]; then 
+    echo "Missing Arguments"
+    exit 1
 fi
 
-source ../torch/bin/activate
-python train.py $ENCODER $DECODER $SENTENCES $EMB
-deactivate
+# training in conda environment if conda exists (i.e. lab machine)
+if [ -x "$(command -v conda)" ]; then 
+    # create or retrieve elmo embedding
+    if [[ $EMB == *"elmo"* ]]; then 
+        cd ..
+        source activate allennlp
+        cd Grammar-Correction
+        python elmo.py $SENTENCES $EMB
+        conda deactivate
+    fi 
+
+    cd ..
+    source activate torch
+    cd Grammar-Correction
+    python train.py $ENCODER $DECODER $SENTENCES $EMB
+    conda deactivate
+# for training in local environment 
+else
+    # train
+    if [[ $EMB == *"elmo"* ]]; then
+        #source ../allennlp/bin/activate
+        python emb/elmo.py $SENTENCES $EMB
+        #deactivate
+    fi
+
+    #source ../torch/bin/activate
+    python train.py $ENCODER $DECODER $SENTENCES $EMB
+    #deactivate
+fi
+
 
