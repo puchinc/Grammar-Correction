@@ -1,3 +1,12 @@
+#!/usr/bin/python
+
+# Example Usage:
+#   python train.py \
+#     -i data/CoNLL_data/train.txt \
+#     -e data/CoNLL_data/train_small.elmo \
+#     -enc data/models/with_error_tag.encoder \
+#     -dec data/models/with_error_tag.decoder
+
 from __future__ import unicode_literals, print_function, division
 from io import open
 import sys
@@ -9,6 +18,7 @@ import random
 import pickle
 import time
 import math
+import argparse
 
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
@@ -25,6 +35,18 @@ from Lang import *
 from seq2seq.config import *
 from seq2seq.AttnDecoderRNN import *
 from seq2seq.EncoderRNN import *
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()        
+    parser.add_argument('-i', '--input_file')                   
+    parser.add_argument('-e', '--embedding')
+    parser.add_argument('-enc', '--encoder_path')
+    parser.add_argument('-dec', '--decoder_path')
+    parser.add_argument('-o', '--output_dir')                   
+    args = parser.parse_args()                                      
+
+    return args
 
 def unicodeToAscii(s):
     return ''.join(
@@ -222,25 +244,20 @@ def load_elmo_pairs(path):
         return pickle.load(elmo)
 
 def main():
-    # python train.py encoder.model decoder.model train.txt train.elmo
-    # python train.py encoder.model decoder.model train.txt nn.embedding 
+    args = parse_args()
+    encoder_path = args.encoder_path
+    decoder_path = args.decoder_path
+    sentence_path = args.input_file
+    emb_path = args.embedding
+
     small = False
     nn_embedding = False
-    if len(sys.argv) == 5:
-        encoder_path = sys.argv[1]
-        decoder_path = sys.argv[2]
-        sentence_path = sys.argv[3]
-        emb_path = sys.argv[4]
-    # Small dataset
-    else:
-        encoder_path = 'data/models/with_error_tag.encoder'
-        decoder_path = 'data/models/with_error_tag.decoder'
-        sentence_path = 'data/CoNLL_data/train.txt'
-        emb_path = 'data/CoNLL_data/train_small.elmo'
-    if emb_path == 'data/CoNLL_data/train_small.elmo' or emb_path == 'CoNLL_data/train_small.elmo.pair':
+
+    if 'elmo' in emb_path:
         small = True
     elif emb_path == 'nn.embedding':
         nn_embedding = True 
+
     # Absolute path
     dir_path = os.path.dirname(os.path.realpath(__file__))
     encoder_path = os.path.join(dir_path, encoder_path)
