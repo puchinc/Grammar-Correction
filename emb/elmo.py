@@ -48,8 +48,8 @@ if __name__ == '__main__':
         emb_path = sys.argv[2]
     else:
         # TEST SMALL DATASET
-        sentence_path = '../data/CoNLL_data/train.txt'
-        emb_path = '../data/CoNLL_data/train_small.elmo'
+        sentence_path = '../data/src/conll.txt'
+        emb_path = '../data/embeddings/conll.elmo'
         pairs = loadConll(sentence_path)[:10]
 
     # no need to pretrain again

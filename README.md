@@ -34,17 +34,17 @@ The dataset are from CoNLL-2013 and CoNLL-2014 Shared Task for grammar correctio
 
 ### Step 1: Preprocess the data
 ```
-python lang8_parser.py -i data/lang-8-20111007-L1-v2.dat -o data/lang8_parsed -l2 English
+python lang8_parser.py -i data/src/lang-8-20111007-L1-v2.dat -o data/src -l2 English
 
 ```
 
 ### Step 2: Train the model
 ```
 python train.py \
-    -i data/CoNLL_data/train.txt \
-    -e data/CoNLL_data/train_small.elmo \
-    -enc data/models/with_error_tag.encoder \
-    -dec data/models/with_error_tag.decoder
+    -i data/test/conll.txt \
+    -e data/test/conll.elmo \
+    -enc data/test/with_error_tag.encoder \
+    -dec data/test/with_error_tag.decoder
 ```
 
 ### Step 3: Correct the grammar

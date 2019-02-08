@@ -2,10 +2,10 @@
 
 # Example Usage:
 #   python train.py \
-#     -i data/CoNLL_data/train.txt \
-#     -e data/CoNLL_data/train_small.elmo \
-#     -enc data/models/with_error_tag.encoder \
-#     -dec data/models/with_error_tag.decoder
+#       -i data/test/conll.txt \
+#       -e data/test/conll.elmo \
+#       -enc data/test/with_error_tag.encoder \
+#       -dec data/test/with_error_tag.decoder
 
 from __future__ import unicode_literals, print_function, division
 from io import open
@@ -29,13 +29,18 @@ import torch
 import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-from Lang import *
+from Lang import Lang
 
-from seq2seq.config import *
-from seq2seq.AttnDecoderRNN import *
-from seq2seq.EncoderRNN import *
+from seq2seq.AttnDecoderRNN import AttnDecoderRNN
+from seq2seq.EncoderRNN import EncoderRNN
+from seq2seq.config import config
 
+# CONSTANT
+SOS_token = config["SOS_token"]
+EOS_token = config["EOS_token"]
+MAX_LENGTH = config["MAX_LENGTH"]
 
 def parse_args():
     parser = argparse.ArgumentParser()        
@@ -151,7 +156,7 @@ def tensorsFromElmoText(pair, output_lang):
     target_tensor = tensorFromSentence(output_lang, ' '.join(pair[1]))
     return (input_tensor, target_tensor)
 
-def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, max_length=MAX_LENGTH):
+def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, teacher_forcing_ratio, max_length=MAX_LENGTH):
     encoder_hidden = encoder.initHidden()
 
     encoder_optimizer.zero_grad()
@@ -197,7 +202,7 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
 
     return loss.item() / target_length
 
-def trainIters(training_pairs, encoder, decoder, n_iters, encoder_path, decoder_path, print_every=1000, plot_every=100, learning_rate=0.01):
+def trainIters(training_pairs, encoder, decoder, n_iters, encoder_path, decoder_path, teacher_forcing_ratio, print_every=1000, plot_every=100, learning_rate=0.01):
     start = time.time()
     plot_losses = []
     print_loss_total = 0  # Reset every print_every
@@ -214,7 +219,7 @@ def trainIters(training_pairs, encoder, decoder, n_iters, encoder_path, decoder_
         target_tensor = training_pair[1]
 
         loss = train(input_tensor, target_tensor, encoder,
-                     decoder, encoder_optimizer, decoder_optimizer, criterion)
+                     decoder, encoder_optimizer, decoder_optimizer, criterion, teacher_forcing_ratio)
         print_loss_total += loss
         plot_loss_total += loss
 
@@ -249,6 +254,14 @@ def main():
     decoder_path = args.decoder_path
     sentence_path = args.input_file
     emb_path = args.embedding
+
+    hidden_size = config["hidden_size"]
+    elmo_size = config["elmo_size"]
+
+    # TRAIN
+    teacher_forcing_ratio = config["teacher_forcing_ratio"]
+    print_every = config["print_every"]
+    n_iters = config["n_iters"]
 
     small = False
     nn_embedding = False
@@ -299,7 +312,7 @@ def main():
                     map_location=lambda storage, loc: storage))
     '''
     trainIters(training_pairs, encoder, decoder, n_iters, encoder_path, 
-            decoder_path, print_every=print_every)
+            decoder_path, teacher_forcing_ratio, print_every=print_every)
     
     # translation/evaluate
     # evaluateRandomly(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang)

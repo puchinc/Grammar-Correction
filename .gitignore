@@ -1,5 +1,13 @@
-data/
-__pycache__/
+data/*
+!data/test
+!data/src
+!data/models
+!data/embeddings
+data/src/*
+data/models/*
+data/embeddings/*
+
+**__pycache__/
+**.DS_Store
 .rsync_exclude
 .exrc
-.DS_Store
