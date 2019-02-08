@@ -20,7 +20,7 @@ args = parser.parse_args()
 
 count = 0
 count_output = 0
-output_file = 'lang8_english'
+output_file = 'lang8'
 
 if not os.path.exists(args.output_dir):
     os.makedirs(args.output_dir)

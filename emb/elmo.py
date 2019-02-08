@@ -1,4 +1,9 @@
 # Need allennlp with torch==0.3.1 && GPU
+
+
+# Example Usage:
+#   python emb/elmo.py data/test/conll.txt data/embeddings/conll_test.elmo
+
 import os
 import sys
 import pickle
@@ -17,9 +22,8 @@ def normalizeString(s):
     s = re.sub(r"[^\-</>a-zA-Z.!?]+", r" ", s)
     return s
 
-def loadConll(path='CoNLL_data/train.txt'):
+def loadConll(path):
     # Read the file and split into lines
-    path='CoNLL_data/train.txt'
     lines = open(path, encoding='utf-8').read().strip().split('\n')
 
     # Split every line into pairs and normalize and then split to words
@@ -41,7 +45,6 @@ def sen2elmo(sentence, elmo):
 
 # input_lang, output_lang, pairs = prepareData('eng', 'fra', True)
 if __name__ == '__main__':
-    # python elmo.py train.txt train.elmo 
     
     if len(sys.argv) == 3:
         sentence_path = sys.argv[1]
