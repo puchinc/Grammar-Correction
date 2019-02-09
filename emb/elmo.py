@@ -1,8 +1,7 @@
 # Need allennlp with torch==0.3.1 && GPU
 
-
 # Example Usage:
-#   python emb/elmo.py data/test/conll.txt data/embeddings/conll_test.elmo
+#   python emb/elmo.py data/test/conll.txt data/embeddings/conll.elmo
 
 import os
 import sys
@@ -58,6 +57,10 @@ if __name__ == '__main__':
     # no need to pretrain again
     if os.path.isfile(emb_path): 
         exit()
+
+    emb_dir = os.path.dirname(os.path.abspath(emb_path))
+    if not os.path.exists(emb_dir):
+        os.makedirs(emb_dir)
     
     from allennlp.modules.elmo import Elmo, batch_to_ids
     options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json" 
