@@ -33,6 +33,7 @@ class EncoderRNN(nn.Module):
         else:
             # use ELMo embedding
             embedded = input.view(1, 1, -1)
+
         output = embedded
         output, hidden = self.gru(output, hidden)
         return output, hidden

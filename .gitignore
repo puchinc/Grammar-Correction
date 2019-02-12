@@ -4,6 +4,7 @@ data/*
 !data/models
 !data/embeddings
 data/src/*
+data/tgt/*
 data/models/*
 data/embeddings/*
 
