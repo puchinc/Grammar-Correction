@@ -275,7 +275,7 @@ def make_model(src_vocab, tgt_vocab, N=6,
     # Initialize parameters with Glorot / fan_avg.
     for p in model.parameters():
         if p.dim() > 1:
-            nn.init.xavier_uniform(p)
+            nn.init.xavier_uniform_(p)
     return model
 
 tmp_model = make_model(10, 10, 2)
@@ -387,7 +387,7 @@ class LabelSmoothing(nn.Module):
     "Implement label smoothing."
     def __init__(self, size, padding_idx, smoothing=0.0):
         super(LabelSmoothing, self).__init__()
-        self.criterion = nn.KLDivLoss(size_average=False)
+        self.criterion = nn.KLDivLoss()
         self.padding_idx = padding_idx
         self.confidence = 1.0 - smoothing
         self.smoothing = smoothing
