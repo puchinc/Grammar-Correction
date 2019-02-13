@@ -12,7 +12,7 @@ Two datasets
 
 ### Virtualenv
 
-You need two virtualenvs named allennlp and torch. allennlp is for elmo embedding, and torch is for machine translation. GPU is required for generating new elmo embeddings and Python3 is used.
+You need three virtualenvs named allennlp, torch, and transformer\_env. allennlp is for the ELMo embedding, torch is for machine translation, and transformer\_env is for the Transformer model. GPU is required for generating new elmo embeddings and Python3 is used.
 
 [ELMo] https://github.com/allenai/allennlp/blob/master/tutorials/how_to/elmo.md 
 * allennlp
@@ -26,6 +26,10 @@ You need two virtualenvs named allennlp and torch. allennlp is for elmo embeddin
         pip install torchvision
         pip install matplotlib
 
+[Transformer] http://nlp.seas.harvard.edu/2018/04/03/attention.html 
+* transformer\_env
+
+        pip install -r transformer/transformer_requirements.txt
 
 ## Quickstart
 
