@@ -13,6 +13,9 @@ from torch.autograd import Variable
 from torchtext import data, datasets
 import spacy
 
+import os
+import sys
+
 ##############################
 #      Model Architecture    #
 ##############################
@@ -292,6 +295,10 @@ tmp_model = make_model(10, 10, 2)
 
 class Batch:
     "Object for holding a batch of data with mask during training."
+    # Maybe it is the norm that should be blamed, I solved this by fixing the Batch class,
+    # self.ntokens = (self.trg_y != pad).data.sum()
+    # -> self.ntokens = (self.trg_y != pad).data.sum().item()
+    # for (self.trg_y != pad).data.sum() is a tensor.
     def __init__(self, src, trg=None, pad=0):
         self.src = src
         self.src_mask = (src != pad).unsqueeze(-2)
@@ -300,7 +307,7 @@ class Batch:
             self.trg_y = trg[:, 1:]
             self.trg_mask = \
                 self.make_std_mask(self.trg, pad)
-            self.ntokens = (self.trg_y != pad).data.sum()
+            self.ntokens = (self.trg_y != pad).data.sum().item()
     
     @staticmethod
     def make_std_mask(tgt, pad):
@@ -318,6 +325,8 @@ def run_epoch(data_iter, model, loss_compute):
     total_tokens = 0
     total_loss = 0
     tokens = 0
+    # change batch.ntokens to batch.ntokens.float().item() 
+    # due to pytorch new version. do the same thing for norm
     for i, batch in enumerate(data_iter):
         out = model.forward(batch.src, batch.trg,
                             batch.src_mask, batch.trg_mask)
@@ -390,7 +399,7 @@ class LabelSmoothing(nn.Module):
     "Implement label smoothing."
     def __init__(self, size, padding_idx, smoothing=0.0):
         super(LabelSmoothing, self).__init__()
-        self.criterion = nn.KLDivLoss()
+        self.criterion = nn.KLDivLoss(reduction='sum')
         self.padding_idx = padding_idx
         self.confidence = 1.0 - smoothing
         self.smoothing = smoothing
@@ -437,16 +446,16 @@ class SimpleLossCompute:
         self.generator = generator
         self.criterion = criterion
         self.opt = opt
-        
+    
+    # change loss.data[0] to loss.item() due to pytorch new version. do the same thing for norm
     def __call__(self, x, y, norm):
         x = self.generator(x)
-        loss = self.criterion(x.contiguous().view(-1, x.size(-1)), 
-                              y.contiguous().view(-1)) / norm
+        loss = self.criterion(x.contiguous().view(-1, x.size(-1)), y.contiguous().view(-1)) / norm
         loss.backward()
         if self.opt is not None:
             self.opt.step()
             self.opt.optimizer.zero_grad()
-        return loss.data[0] * norm
+        return loss.item() * norm
 
 def greedy_decode(model, src, src_mask, max_len, start_symbol):
     memory = model.encode(src, src_mask)
@@ -534,8 +543,8 @@ class MultiGPULossCompute:
             # Sum and normalize loss
             l = nn.parallel.gather(loss, 
                                    target_device=self.devices[0])
-            l = l.sum()[0] / normalize
-            total += l.data[0]
+            l = l.sum() / normalize
+            total += l.item()
 
             # Backprop loss to output of transformer
             if self.opt is not None:
@@ -581,6 +590,8 @@ def main():
     # src_mask = Variable(torch.ones(1, 1, 10) )
     # print(greedy_decode(model, src, src_mask, max_len=10, start_symbol=1))
 
+    # sys.exit()
+
     #####################
     #   Data Loading    #
     #####################
@@ -597,9 +608,12 @@ def main():
                      eos_token = EOS_WORD, pad_token=BLANK_WORD)
 
     MAX_LEN = 100
-    train = datasets.TranslationDataset(
-        path='../data/test/lang8_small', exts=('.src', '.trg'),
-        fields=(TEXT, TEXT))
+    train = datasets.TranslationDataset(path='../data/test/lang8_small.train', 
+            exts=('.src', '.trg'), fields=(TEXT, TEXT))
+    val = datasets.TranslationDataset(path='../data/test/lang8_small.val', 
+            exts=('.src', '.trg'), fields=(TEXT, TEXT))
+    test = datasets.TranslationDataset(path='../data/test/lang8_small.test', 
+            exts=('.src', '.trg'), fields=(TEXT, TEXT))
     print(train[0].src)
     print(train[0].trg)
 
@@ -607,20 +621,24 @@ def main():
     TEXT.build_vocab(train.src, min_freq=MIN_FREQ)
 
     # GPUs to use
-    devices = [0, 1, 2, 3]
+    # num2cuda = lambda x: torch.device("cuda" if torch.cuda.is_available() else "cpu", int(x))
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device_ids = [0, 1, 2, 3]
+    # devices = [num2cuda(id_) for id_ in device_ids]
+
     pad_idx = TEXT.vocab.stoi["<blank>"]
     model = make_model(len(TEXT.vocab), len(TEXT.vocab), N=6)
     model.cuda()
     criterion = LabelSmoothing(size=len(TEXT.vocab), padding_idx=pad_idx, smoothing=0.1)
     criterion.cuda()
-    BATCH_SIZE = 12000
-    train_iter = MyIterator(train, batch_size=BATCH_SIZE, device=0,
+    BATCH_SIZE = 1200
+    train_iter = MyIterator(train, batch_size=BATCH_SIZE, device=device,
                             repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
                             batch_size_fn=batch_size_fn, train=True)
-    valid_iter = MyIterator(val, batch_size=BATCH_SIZE, device=0,
+    valid_iter = MyIterator(val, batch_size=BATCH_SIZE, device=device,
                             repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
                             batch_size_fn=batch_size_fn, train=False)
-    model_par = nn.DataParallel(model, device_ids=devices)
+    # model_par = nn.DataParallel(model, device_ids=device_ids)
 
     ##########################
     #   Training the System  #
@@ -629,17 +647,28 @@ def main():
     model_opt = NoamOpt(model.src_embed[0].d_model, 1, 2000,
             torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
     for epoch in range(10):
-        model_par.train()
+        model.train()
         run_epoch((rebatch(pad_idx, b) for b in train_iter), 
-                  model_par, 
-                  MultiGPULossCompute(model.generator, criterion, 
-                                      devices=devices, opt=model_opt))
-        model_par.eval()
+                  model, 
+                  SimpleLossCompute(model.generator, criterion, model_opt))
+        model.eval()
         loss = run_epoch((rebatch(pad_idx, b) for b in valid_iter), 
-                          model_par, 
-                          MultiGPULossCompute(model.generator, criterion, 
-                          devices=devices, opt=None))
-        print(loss)
+                          model, 
+                          SimpleLossCompute(model.generator, criterion, model_opt))
+
+    # model_opt = NoamOpt(model.src_embed[0].d_model, 1, 2000,
+            # torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
+    # for epoch in range(10):
+        # model_par.train()
+        # run_epoch((rebatch(pad_idx, b) for b in train_iter), 
+                  # model_par, 
+                  # MultiGPULossCompute(model.generator, criterion, 
+                                      # devices=devices, opt=model_opt))
+        # model_par.eval()
+        # loss = run_epoch((rebatch(pad_idx, b) for b in valid_iter), 
+                          # model_par, 
+                          # MultiGPULossCompute(model.generator, criterion, 
+                          # devices=devices, opt=None))
 
     ##########################
     #       Translation      #

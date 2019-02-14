@@ -10,10 +10,14 @@ import torch
 import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
+from nltk.translate.bleu_score import sentence_bleu
+from nltk.tokenize import word_tokenize
 
 from seq2seq.AttnDecoderRNN import *
 from seq2seq.EncoderRNN import *
 from seq2seq.config import *
+
+MAX_LENGTH = config["MAX_LENGTH"]
 
 def evaluate(encoder, decoder, sentence, input_lang, output_lang,  max_length=MAX_LENGTH):
     with torch.no_grad():
@@ -58,6 +62,14 @@ def evaluateRandomly(encoder, decoder, sentence_pairs, elmo_pairs, input_lang, o
         output_sentence = ' '.join(output_words)
         print('<', output_sentence)
         print('')
+        
+        # calculate bleu score
+        tokens_reference = word_tokenize(sentence_pair[1])
+        tokens_target = word_tokenize(output_sentence)
+        print(tokens_reference)
+        print(tokens_target)
+        score = sentence_bleu([tokens_reference], tokens_target)
+        print(score)
 
 def showAttention(input_sentence, output_words, attentions):
     # Set up figure with colorbar
@@ -90,7 +102,6 @@ def main():
     # translation/evaluate
     # evaluateRandomly(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang)
     # evaluateAndShowAttention(encoder, decoder, 'here i want to share forest view on this issue .', input_lang, output_lang, max_length=MAX_LENGTH)
-
-
+    pass 
 if __name__ == '__main__':
     main()
