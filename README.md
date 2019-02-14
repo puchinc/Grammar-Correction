@@ -25,6 +25,7 @@ You need three virtualenvs named allennlp, torch, and transformer\_env. allennlp
         pip install torch
         pip install torchvision
         pip install matplotlib
+        pip install nltk
 
 [Transformer] http://nlp.seas.harvard.edu/2018/04/03/attention.html 
 * transformer\_env
