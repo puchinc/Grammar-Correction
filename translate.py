@@ -16,8 +16,20 @@ from nltk.tokenize import word_tokenize
 from seq2seq.AttnDecoderRNN import *
 from seq2seq.EncoderRNN import *
 from seq2seq.config import *
+import pickle
 
+# CONSTANT
+SOS_token = config["SOS_token"]
+EOS_token = config["EOS_token"]
 MAX_LENGTH = config["MAX_LENGTH"]
+
+def indexesFromSentence(lang, sentence):
+    return [lang.word2index[word] for word in sentence.split(' ')]
+
+def tensorFromSentence(lang, sentence):
+    indexes = indexesFromSentence(lang, sentence)
+    indexes.append(EOS_token)
+    return torch.tensor(indexes, dtype=torch.long, device=device).view(-1, 1)
 
 def evaluate(encoder, decoder, sentence, input_lang, output_lang,  max_length=MAX_LENGTH):
     with torch.no_grad():
@@ -95,13 +107,23 @@ def evaluateAndShowAttention(encoder, decoder, sentence, input_lang, output_lang
     print('output =', ' '.join(output_words))
     showAttention(sentence, output_words, attentions)
 
+def load_variables():
+    encoder = pickle.load(open('encoder.pkl','rb'))
+    decoder = pickle.load(open('decoder.pkl','rb'))
+    sentence_pairs = pickle.load(open('sentence_pairs.pkl', 'rb'))
+    pairs = pickle.load(open('pairs.pkl', 'rb'))
+    input_lang = pickle.load(open('input_lang.pkl', 'rb'))
+    output_lang = pickle.load(open('output_lang.pkl', 'rb'))
+    return encoder, decoder, sentence_pairs, pairs, input_lang, output_lang
 
 # TODO
 def main():
+    encoder, decoder, sentence_pairs, pairs, input_lang, output_lang = load_variables()
 
     # translation/evaluate
-    # evaluateRandomly(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang)
+    # works for nn.embedding. TODO for elmo, bert
+    evaluateRandomly(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang)
     # evaluateAndShowAttention(encoder, decoder, 'here i want to share forest view on this issue .', input_lang, output_lang, max_length=MAX_LENGTH)
-    pass 
+     
 if __name__ == '__main__':
     main()

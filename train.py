@@ -19,6 +19,7 @@ import pickle
 import time
 import math
 import argparse
+import pickle
 
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
@@ -248,6 +249,14 @@ def load_elmo_pairs(path):
     with open(path, 'rb') as elmo:
         return pickle.load(elmo)
 
+def save_variables(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang):
+    pickle.dump(encoder,open('encoder.pkl','wb'))
+    pickle.dump(decoder,open('decoder.pkl','wb'))
+    pickle.dump(sentence_pairs,open('sentence_pairs.pkl','wb'))
+    pickle.dump(pairs,open('pairs.pkl','wb'))
+    pickle.dump(input_lang,open('input_lang.pkl','wb'))
+    pickle.dump(output_lang,open('output_lang.pkl','wb'))
+
 def main():
     args = parse_args()
     encoder_path = args.encoder_path
@@ -314,10 +323,7 @@ def main():
     trainIters(training_pairs, encoder, decoder, n_iters, encoder_path, 
             decoder_path, teacher_forcing_ratio, print_every=print_every)
     
-    # translation/evaluate
-    # evaluateRandomly(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang)
-    # evaluateAndShowAttention(encoder, decoder, 'here i want to share forest view on this issue .', input_lang, output_lang, max_length=MAX_LENGTH)
-
+    save_variables(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang) 
 
 if __name__ == '__main__':
     main()
