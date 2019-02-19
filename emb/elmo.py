@@ -76,12 +76,12 @@ if __name__ == '__main__':
     # emb_path = 'CoNLL_data/train.elmo'
 
     # pairs = [[['First', 'sentence', '.'], ['Another', '.']]]
-    pairs = loadConll(sentence_path)
+    pairs = loadConll(sentence_path)[:100]
 
     # (elmo, text) pairs
-    # embeddings = [[sen2elmo(pair[0], elmo), pair[1]] for pair in pairs]
+    embeddings = [[sen2elmo(pair[0], elmo), pair[1]] for pair in pairs]
     # (elmo, elmo) pairs
-    embeddings = [elmoFromPair(pair, elmo) for pair in pairs]
+    # embeddings = [elmoFromPair(pair, elmo) for pair in pairs]
 
     with open(emb_path, 'wb') as file:
         pickle.dump(embeddings, file)

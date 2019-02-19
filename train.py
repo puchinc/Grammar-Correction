@@ -98,7 +98,7 @@ def prepareData(path, lang1, lang2, reverse=False, small=False):
     input_lang, output_lang, pairs = readLangs(path, lang1, lang2, reverse)
     print("Read %s sentence pairs" % len(pairs))
     if small:
-        indices = [i for i in range(10)]
+        indices = [i for i in range(100)]
     else:
         indices, pairs = filterPairs(pairs)
     print("Trimmed to %s sentence pairs" % len(pairs))
@@ -249,13 +249,14 @@ def load_elmo_pairs(path):
     with open(path, 'rb') as elmo:
         return pickle.load(elmo)
 
-def save_variables(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang):
+def save_variables(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang, nn_embedding):
     pickle.dump(encoder,open('encoder.pkl','wb'))
     pickle.dump(decoder,open('decoder.pkl','wb'))
     pickle.dump(sentence_pairs,open('sentence_pairs.pkl','wb'))
     pickle.dump(pairs,open('pairs.pkl','wb'))
     pickle.dump(input_lang,open('input_lang.pkl','wb'))
     pickle.dump(output_lang,open('output_lang.pkl','wb'))
+    pickle.dump(nn_embedding, open('nn_embedding.pkl','wb'))
 
 def main():
     args = parse_args()
@@ -323,7 +324,7 @@ def main():
     trainIters(training_pairs, encoder, decoder, n_iters, encoder_path, 
             decoder_path, teacher_forcing_ratio, print_every=print_every)
     
-    save_variables(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang) 
+    save_variables(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang, nn_embedding) 
 
 if __name__ == '__main__':
     main()

@@ -18,6 +18,8 @@ from seq2seq.EncoderRNN import *
 from seq2seq.config import *
 import pickle
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 # CONSTANT
 SOS_token = config["SOS_token"]
 EOS_token = config["EOS_token"]
@@ -31,9 +33,14 @@ def tensorFromSentence(lang, sentence):
     indexes.append(EOS_token)
     return torch.tensor(indexes, dtype=torch.long, device=device).view(-1, 1)
 
-def evaluate(encoder, decoder, sentence, input_lang, output_lang,  max_length=MAX_LENGTH):
+def evaluate(encoder, decoder, sentence, elmo_pair, input_lang, output_lang,  nn_embedding, max_length=MAX_LENGTH):
     with torch.no_grad():
-        input_tensor = tensorFromSentence(input_lang, sentence)
+        # for nn.embedding
+        if nn_embedding:
+            input_tensor = tensorFromSentence(input_lang, sentence)
+        # for elmo: 
+        else:
+            input_tensor = elmo_pair[0].to(device)
         input_length = input_tensor.size()[0]
         encoder_hidden = encoder.initHidden()
         encoder_outputs = torch.zeros(max_length, encoder.hidden_size, device=device)
@@ -65,12 +72,13 @@ def evaluate(encoder, decoder, sentence, input_lang, output_lang,  max_length=MA
         return decoded_words, decoder_attentions[:di + 1]
 
 
-def evaluateRandomly(encoder, decoder, sentence_pairs, elmo_pairs, input_lang, output_lang, n=10):
+def evaluateRandomly(encoder, decoder, sentence_pairs, elmo_pairs, input_lang, output_lang, nn_embedding, n=10):
     for i in range(n):
         sentence_pair = random.choice(sentence_pairs)
+        elmo_pair = random.choice(elmo_pairs)
         print('>', sentence_pair[0])
         print('=', sentence_pair[1])
-        output_words, attentions = evaluate(encoder, decoder, sentence_pair[0], input_lang, output_lang)
+        output_words, attentions = evaluate(encoder, decoder, sentence_pair[0], elmo_pair, input_lang, output_lang, nn_embedding)
         output_sentence = ' '.join(output_words)
         print('<', output_sentence)
         print('')
@@ -114,16 +122,13 @@ def load_variables():
     pairs = pickle.load(open('pairs.pkl', 'rb'))
     input_lang = pickle.load(open('input_lang.pkl', 'rb'))
     output_lang = pickle.load(open('output_lang.pkl', 'rb'))
-    return encoder, decoder, sentence_pairs, pairs, input_lang, output_lang
+    nn_embedding = pickle.load(open('nn_embedding.pkl', 'rb'))
+    return encoder, decoder, sentence_pairs, pairs, input_lang, output_lang, nn_embedding
 
-# TODO
 def main():
-    encoder, decoder, sentence_pairs, pairs, input_lang, output_lang = load_variables()
-
-    # translation/evaluate
-    # works for nn.embedding. TODO for elmo, bert
-    evaluateRandomly(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang)
-    # evaluateAndShowAttention(encoder, decoder, 'here i want to share forest view on this issue .', input_lang, output_lang, max_length=MAX_LENGTH)
-     
+    encoder, decoder, sentence_pairs, pairs, input_lang, output_lang, nn_embedding = load_variables()
+    
+    evaluateRandomly(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang, nn_embedding)
+    
 if __name__ == '__main__':
     main()

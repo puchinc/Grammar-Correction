@@ -44,19 +44,22 @@ python lang8_parser.py \
 ### Step 2: Pretrained word embeddings
 ```
 (allennlp_venv)
-python emb/elmo.py data/test/conll.txt data/embeddings/conll.elmo 
+python emb/elmo.py data/test/lang8_small.txt data/embeddings/lang8_small.elmo 
 ```
 
 ### Step 3: Train the model
 ```
 (torch_venv)
 python train.py \
-    -i data/test/conll.txt \
-    -e data/test/conll.elmo \
+    -i data/test/lang8_small.txt \
+    -e data/embeddings/lang8_small.elmo \
     -enc data/test/with_error_tag.encoder \
     -dec data/test/with_error_tag.decoder
 ```
 
 ### Step 4: Correct the grammar
-TODO
+```
+(torch_venv)
+python translate.py
+```
 
