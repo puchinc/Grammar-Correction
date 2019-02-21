@@ -7,6 +7,7 @@ config = {
     # MODEL
     "hidden_size": 256,
     "elmo_size": 1024,
+    "bert_size": 512,
 
     # TRAIN
     "teacher_forcing_ratio": 0.5,

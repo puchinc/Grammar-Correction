@@ -23,7 +23,7 @@ class EncoderRNN(nn.Module):
             self.embedding = nn.Embedding(input_size, hidden_size)
             self.gru = nn.GRU(hidden_size, hidden_size)
         else:
-            # use ELMo embedding
+            # use ELMo or bert embedding
             self.gru = nn.GRU(input_size, hidden_size)
 
     def forward(self, input, hidden):
@@ -31,7 +31,7 @@ class EncoderRNN(nn.Module):
             # use nn.embedding
             embedded = self.embedding(input).view(1, 1, -1)
         else:
-            # use ELMo embedding
+            # use ELMo or bert embedding
             embedded = input.view(1, 1, -1)
 
         output = embedded
