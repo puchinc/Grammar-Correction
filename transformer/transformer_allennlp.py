@@ -31,8 +31,8 @@ from allennlp.modules.token_embedders import Embedding
 from allennlp.predictors import SimpleSeq2SeqPredictor
 from allennlp.training.trainer import Trainer
 
-EN_EMBEDDING_DIM = 256
-ZH_EMBEDDING_DIM = 256
+SRC_EMBEDDING_DIM = 256
+TGT_EMBEDDING_DIM = 256
 HIDDEN_DIM = 256
 CUDA_DEVICE = 0
 
@@ -48,18 +48,18 @@ def main():
     vocab = Vocabulary.from_instances(train_dataset + validation_dataset,
                                       min_count={'tokens': 3, 'target_tokens': 3})
 
-    en_embedding = Embedding(num_embeddings=vocab.get_vocab_size('tokens'),
-                             embedding_dim=EN_EMBEDDING_DIM)
+    src_embedding = Embedding(num_embeddings=vocab.get_vocab_size('tokens'),
+                             embedding_dim=SRC_EMBEDDING_DIM)
     
-    encoder = StackedSelfAttentionEncoder(input_dim=EN_EMBEDDING_DIM, hidden_dim=HIDDEN_DIM, projection_dim=128, feedforward_hidden_dim=128, num_layers=1, num_attention_heads=8)
+    encoder = StackedSelfAttentionEncoder(input_dim=SRC_EMBEDDING_DIM, hidden_dim=HIDDEN_DIM, projection_dim=128, feedforward_hidden_dim=128, num_layers=1, num_attention_heads=8)
 
-    source_embedder = BasicTextFieldEmbedder({"tokens": en_embedding})
+    source_embedder = BasicTextFieldEmbedder({"tokens": src_embedding})
    
     attention = DotProductAttention()
 
     max_decoding_steps = 20
     model = SimpleSeq2Seq(vocab, source_embedder, encoder, max_decoding_steps,
-                          target_embedding_dim=ZH_EMBEDDING_DIM,
+                          target_embedding_dim=TGT_EMBEDDING_DIM,
                           target_namespace='target_tokens',
                           attention=attention,
                           beam_size=8,
