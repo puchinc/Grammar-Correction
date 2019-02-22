@@ -32,6 +32,12 @@ You need three virtualenvs named allennlp, torch, and transformer\_env. allennlp
 
         pip install allennlp
 
+[Batched seq2seq] https://github.com/howardyclo/pytorch-seq2seq-example/blob/master/seq2seq.ipynb
+* batched\_seq2seq\_env
+
+        pip install -r batched_seq2seq/requirements.txt
+        python -m spacy download en_core_web_lg
+
 ## ELMo Quickstart
 
 ### Step 1: Preprocess the data
@@ -66,6 +72,7 @@ python translate.py
 
 ### Step 1: Preprocess the data
 ```
+cd transformer
 python prepare_csv.py \
        -i ../data/test/lang8_small.txt \
        -train ../data/test/lang8_small_train.csv \
@@ -80,5 +87,25 @@ python prepare_csv.py \
 ```
 (transformer_env)
 python transformer_allennlp.py
+```
+### Batched Seq2seq Quickstart
+
+### Step 1: Train the model
+```
+cd batched_seq2seq
+(batched_seq2seq_env)
+python seq2seq.py
+```
+
+### Step 2: Evaluate the model
+```
+(batched_seq2seq_env)
+python ./data/gleu.py \
+       -s ./data/source_test.txt 
+       -r ./data/target_test0.txt \
+          ./data/target_test1.txt \
+          ./data/target_test2.txt \
+          ./data/target_test3.txt \
+       --hyp ./data/pred.txt
 ```
 
