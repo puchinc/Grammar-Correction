@@ -250,7 +250,7 @@ def main():
 
     input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
     input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
-    example_index = torch.arange(all_input_ids.size(0), dtype=torch.long)
+    #example_index = torch.arange(all_input_ids.size(0), dtype=torch.long)
 
     model.eval()
 
