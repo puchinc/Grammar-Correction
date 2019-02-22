@@ -157,6 +157,11 @@ def tensorsFromElmoText(pair, output_lang):
     target_tensor = tensorFromSentence(output_lang, ' '.join(pair[1]))
     return (input_tensor, target_tensor)
 
+def tensorsFromBertText(pair, output_lang):
+    input_tensor = pair[0].to(device)
+    target_tensor = tensorFromSentence(output_lang, ' '.join(pair[1]))
+    return (input_tensor, target_tensor)
+
 def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, teacher_forcing_ratio, max_length=MAX_LENGTH):
     encoder_hidden = encoder.initHidden()
 
@@ -249,6 +254,10 @@ def load_elmo_pairs(path):
     with open(path, 'rb') as elmo:
         return pickle.load(elmo)
 
+def load_bert_pairs(path):
+    with open(path, 'rb') as bert:
+        return pickle.load(bert)
+
 def save_variables(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang, nn_embedding):
     pickle.dump(encoder,open('encoder.pkl','wb'))
     pickle.dump(decoder,open('decoder.pkl','wb'))
@@ -267,6 +276,7 @@ def main():
 
     hidden_size = config["hidden_size"]
     elmo_size = config["elmo_size"]
+    bert_size = config["bert_size"]
 
     # TRAIN
     teacher_forcing_ratio = config["teacher_forcing_ratio"]
@@ -278,6 +288,8 @@ def main():
 
     if 'elmo' in emb_path:
         small = True
+    elif 'bert' in emb_path:
+        big = True
     elif emb_path == 'nn.embedding':
         nn_embedding = True 
 
@@ -295,19 +307,28 @@ def main():
     if 'elmo' in emb_path:
         elmo_pairs = load_elmo_pairs(emb_path)
         pairs = [elmo_pairs[i] for i in indices]
+    if 'bert' in emb_path:
+        bert_pairs = load_bert_pairs(emb_path)
+        pairs = [bert_pairs[i] for i in indices]
+
     if nn_embedding:
         training_pairs = [tensorsFromPair(random.choice(sentence_pairs), input_lang, output_lang) for i in range(n_iters)]
     elif small == True:
         training_pairs = [tensorsFromElmoText(random.choice(pairs), output_lang) for i in range(n_iters)]
+    elif big == True:
+        training_pairs = [tensorsFromBertText(random.choice(pairs), output_lang) for i in range(n_iters)]
     else:
     	training_pairs = [tensorsToDevice(random.choice(pairs)) for i in range(n_iters)]
         #training_pairs = [random.choice(pairs).to(device) for i in range(n_iters)]
     if nn_embedding:
         # use nn.embedding
         encoder = EncoderRNN(input_lang.n_words, hidden_size, 'nn.embedding').to(device)
-    else:
+    elif small == True:
         # use elmo embedding
         encoder = EncoderRNN(elmo_size, hidden_size).to(device)
+    elif big == True:
+        # use bert embedding
+        encoder = EncoderRNN(bert_size, hidden_size).to(device)
     decoder = AttnDecoderRNN(hidden_size, output_lang.n_words).to(device)
     ''' 
     if os.path.isfile(encoder_path) and os.path.isfile(decoder_path):
