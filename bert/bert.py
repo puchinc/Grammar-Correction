@@ -23,6 +23,7 @@ import collections
 import logging
 import json
 import re
+import pickle
 
 import torch
 from torch.utils.data import TensorDataset, DataLoader, SequentialSampler
@@ -268,7 +269,7 @@ def main():
     embeddings = [[tensor, pair[1]] for pair in pairs]
 
     with open(emb_path, 'wb') as file:
-    pickle.dump(embeddings, file)
+        pickle.dump(embeddings, file)
 
 
     ''' #original bert.py
