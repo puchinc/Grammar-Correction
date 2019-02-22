@@ -27,12 +27,12 @@ You need three virtualenvs named allennlp, torch, and transformer\_env. allennlp
         pip install matplotlib
         pip install nltk
 
-[Transformer] http://nlp.seas.harvard.edu/2018/04/03/attention.html 
+[Transformer] http://www.realworldnlpbook.com/blog/building-seq2seq-machine-translation-models-using-allennlp.html
 * transformer\_env
 
-        pip install -r transformer/transformer_requirements.txt
+        pip install allennlp
 
-## Quickstart
+## ELMo Quickstart
 
 ### Step 1: Preprocess the data
 ```
@@ -61,5 +61,24 @@ python train.py \
 ```
 (torch_venv)
 python translate.py
+```
+## Transformer Quickstart
+
+### Step 1: Preprocess the data
+```
+python prepare_csv.py \
+       -i ../data/test/lang8_small.txt \
+       -train ../data/test/lang8_small_train.csv \
+       -train_r 0.6 \
+       -test ../data/test/lang8_small_test.csv \
+       -test_r 0.2 \
+       -val ../data/test/lang8_small_val.csv \
+       -val_r 0.2
+```
+
+### Step 2: Train and evaluate the model
+```
+(transformer_env)
+python transformer_allennlp.py
 ```
 
