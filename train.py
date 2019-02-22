@@ -258,14 +258,14 @@ def load_bert_pairs(path):
     with open(path, 'rb') as bert:
         return pickle.load(bert)
 
-def save_variables(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang, nn_embedding):
-    pickle.dump(encoder,open('encoder.pkl','wb'))
-    pickle.dump(decoder,open('decoder.pkl','wb'))
-    pickle.dump(sentence_pairs,open('sentence_pairs.pkl','wb'))
-    pickle.dump(pairs,open('pairs.pkl','wb'))
-    pickle.dump(input_lang,open('input_lang.pkl','wb'))
-    pickle.dump(output_lang,open('output_lang.pkl','wb'))
-    pickle.dump(nn_embedding, open('nn_embedding.pkl','wb'))
+def save_variables(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang, nn_embedding, emb_type):
+    pickle.dump(encoder,open(emb_tpye+'encoder.pkl','wb'))
+    pickle.dump(decoder,open(emb_tpye+'decoder.pkl'+emb_type,'wb'))
+    pickle.dump(sentence_pairs,open(emb_tpye+'sentence_pairs.pkl','wb'))
+    pickle.dump(pairs,open(emb_tpye+'pairs.pkl','wb'))
+    pickle.dump(input_lang,open(emb_tpye+'input_lang.pkl','wb'))
+    pickle.dump(output_lang,open(emb_tpye+'output_lang.pkl','wb'))
+    pickle.dump(nn_embedding, open(emb_tpye+'nn_embedding.pkl','wb'))
 
 def main():
     args = parse_args()
@@ -273,6 +273,7 @@ def main():
     decoder_path = args.decoder_path
     sentence_path = args.input_file
     emb_path = args.embedding
+    emb_type = ""
 
     hidden_size = config["hidden_size"]
     elmo_size = config["elmo_size"]
@@ -288,8 +289,10 @@ def main():
 
     if 'elmo' in emb_path:
         small = True
+        emb_type = "elmo_"
     elif 'bert' in emb_path:
         big = True
+        emb_type = "bert_"
     elif emb_path == 'nn.embedding':
         nn_embedding = True 
 
@@ -345,7 +348,7 @@ def main():
     trainIters(training_pairs, encoder, decoder, n_iters, encoder_path, 
             decoder_path, teacher_forcing_ratio, print_every=print_every)
     
-    save_variables(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang, nn_embedding) 
+    save_variables(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang, nn_embedding, emb_type) 
 
 if __name__ == '__main__':
     main()
