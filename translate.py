@@ -115,18 +115,18 @@ def evaluateAndShowAttention(encoder, decoder, sentence, input_lang, output_lang
     print('output =', ' '.join(output_words))
     showAttention(sentence, output_words, attentions)
 
-def load_variables():
-    encoder = pickle.load(open('encoder.pkl','rb'))
-    decoder = pickle.load(open('decoder.pkl','rb'))
-    sentence_pairs = pickle.load(open('sentence_pairs.pkl', 'rb'))
-    pairs = pickle.load(open('pairs.pkl', 'rb'))
-    input_lang = pickle.load(open('input_lang.pkl', 'rb'))
-    output_lang = pickle.load(open('output_lang.pkl', 'rb'))
-    nn_embedding = pickle.load(open('nn_embedding.pkl', 'rb'))
+def load_variables(emb_type):
+    encoder = pickle.load(open(emb_type + 'encoder.pkl','rb'))
+    decoder = pickle.load(open(emb_type + 'decoder.pkl','rb'))
+    sentence_pairs = pickle.load(open(emb_type + 'sentence_pairs.pkl', 'rb'))
+    pairs = pickle.load(open(emb_type + 'pairs.pkl', 'rb'))
+    input_lang = pickle.load(open(emb_type + 'input_lang.pkl', 'rb'))
+    output_lang = pickle.load(open(emb_type + 'output_lang.pkl', 'rb'))
+    nn_embedding = pickle.load(open(emb_type + 'nn_embedding.pkl', 'rb'))
     return encoder, decoder, sentence_pairs, pairs, input_lang, output_lang, nn_embedding
 
 def main():
-    encoder, decoder, sentence_pairs, pairs, input_lang, output_lang, nn_embedding = load_variables()
+    encoder, decoder, sentence_pairs, pairs, input_lang, output_lang, nn_embedding = load_variables('elmo_')
     
     evaluateRandomly(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang, nn_embedding)
     

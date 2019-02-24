@@ -259,13 +259,13 @@ def load_bert_pairs(path):
         return pickle.load(bert)
 
 def save_variables(encoder, decoder, sentence_pairs, pairs, input_lang, output_lang, nn_embedding, emb_type):
-    pickle.dump(encoder,open(emb_tpye+'encoder.pkl','wb'))
-    pickle.dump(decoder,open(emb_tpye+'decoder.pkl'+emb_type,'wb'))
-    pickle.dump(sentence_pairs,open(emb_tpye+'sentence_pairs.pkl','wb'))
-    pickle.dump(pairs,open(emb_tpye+'pairs.pkl','wb'))
-    pickle.dump(input_lang,open(emb_tpye+'input_lang.pkl','wb'))
-    pickle.dump(output_lang,open(emb_tpye+'output_lang.pkl','wb'))
-    pickle.dump(nn_embedding, open(emb_tpye+'nn_embedding.pkl','wb'))
+    pickle.dump(encoder,open(emb_type+'encoder.pkl','wb'))
+    pickle.dump(decoder,open(emb_type+'decoder.pkl','wb'))
+    pickle.dump(sentence_pairs,open(emb_type+'sentence_pairs.pkl','wb'))
+    pickle.dump(pairs,open(emb_type+'pairs.pkl','wb'))
+    pickle.dump(input_lang,open(emb_type+'input_lang.pkl','wb'))
+    pickle.dump(output_lang,open(emb_type+'output_lang.pkl','wb'))
+    pickle.dump(nn_embedding, open(emb_type+'nn_embedding.pkl','wb'))
 
 def main():
     args = parse_args()
@@ -322,7 +322,6 @@ def main():
         training_pairs = [tensorsFromBertText(random.choice(pairs), output_lang) for i in range(n_iters)]
     else:
     	training_pairs = [tensorsToDevice(random.choice(pairs)) for i in range(n_iters)]
-        #training_pairs = [random.choice(pairs).to(device) for i in range(n_iters)]
     if nn_embedding:
         # use nn.embedding
         encoder = EncoderRNN(input_lang.n_words, hidden_size, 'nn.embedding').to(device)
