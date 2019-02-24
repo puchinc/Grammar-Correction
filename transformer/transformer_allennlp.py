@@ -1,18 +1,25 @@
-# transformer using allennlp
-# reference: https://github.com/mhagiwara/realworldnlp/blob/master/examples/mt/mt.py
-# http://www.realworldnlpbook.com/blog/building-seq2seq-machine-translation-models-using-allennlp.html
-# inputs: lang8_small_train.csv and lang8_small_val.csv with source\ttarget 
-# requirements: pip install allennlp 
-# to get train and val files:
-# python prepare_csv.py \
-#       -i ../data/test/lang8_small.txt \
-#       -train ../data/test/lang8_small_train.csv \
-#       -train_r 0.6 \
-#       -test ../data/test/lang8_small_test.csv \
-#       -test_r 0.2 \
-#       -val ../data/test/lang8_small_val.csv \
-#       -val_r 0.2
-
+'''
+transformer using allennlp
+reference: https://github.com/mhagiwara/realworldnlp/blob/master/examples/mt/mt.py
+    http://www.realworldnlpbook.com/blog/building-seq2seq-machine-translation-models-using-allennlp.html
+inputs: lang8_small_train.csv and lang8_small_val.csv with source\ttarget 
+requirements: pip install allennlp 
+to get train and val files:
+       python prepare_csv.py \
+       -i ../data/test/lang8_small.txt \
+       -train ../data/test/lang8_small_train.csv \
+       -train_r 0.6 \
+       -test ../data/test/lang8_small_test.csv \
+       -test_r 0.2 \
+       -val ../data/test/lang8_small_val.csv \
+       -val_r 0.2
+to run this code: python transformer.py
+to evaluate using gleu: 
+       python gleu.py \
+       -s source.txt 
+       -r target.txt \
+       --hyp pred.txt
+'''
 import itertools
 import torch
 import torch.optim as optim
@@ -77,18 +84,30 @@ def main():
                       validation_dataset=validation_dataset,
                       num_epochs=1,
                       cuda_device=CUDA_DEVICE)
-
-    for i in range(50):
+    num_epochs = 50
+    for i in range(num_epochs):
         print('Epoch: {}'.format(i))
         trainer.train()
 
         predictor = SimpleSeq2SeqPredictor(model, reader)
-
+        
+        source_sentences = []
+        target_sentences = []
+        pred_sentences = []
         for instance in itertools.islice(validation_dataset, 10):
             print('SOURCE:', instance.fields['source_tokens'].tokens)
             print('GOLD:', instance.fields['target_tokens'].tokens)
             print('PRED:', predictor.predict_instance(instance)['predicted_tokens'])
-
+            if i == num_epochs - 1:
+                source_sentences.append(' '.join(str(e) for e in instance.fields['source_tokens'].tokens))
+                with open('source.txt','w') as f:
+                    f.write('\n'.join(source_sentences))
+                target_sentences.append(' '.join(str(e) for e in instance.fields['target_tokens'].tokens))
+                with open('target.txt','w') as f:
+                    f.write('\n'.join(target_sentences))
+                pred_sentences.append(' '.join(str(e) for e in predictor.predict_instance(instance)['predicted_tokens']))
+                with open('pred.txt','w') as f:
+                    f.write('\n'.join(pred_sentences))
 
 if __name__ == '__main__':
     main()
