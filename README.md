@@ -43,9 +43,9 @@ You need three virtualenvs named allennlp, torch, and transformer\_env. allennlp
 ### Step 1: Preprocess the data
 ```
 python lang8_parser.py \
-    -i lang-8-20111007-L1-v2.dat \
-    -o data/src \
-    -l2 English
+       -i lang-8-20111007-L1-v2.dat \
+       -o data/src \
+       -l2 English
 ```
 ### Step 2: Pretrained word embeddings
 ```
@@ -57,17 +57,18 @@ python emb/elmo.py data/test/lang8_small.txt data/embeddings/lang8_small.elmo
 ```
 (torch_venv)
 python train.py \
-    -i data/test/lang8_small.txt \
-    -e data/embeddings/lang8_small.elmo \
-    -enc data/test/with_error_tag.encoder \
-    -dec data/test/with_error_tag.decoder
+       -i data/test/lang8_small.txt \
+       -e data/embeddings/lang8_small.elmo \
+       -enc data/test/with_error_tag.encoder \
+       -dec data/test/with_error_tag.decoder
 ```
 
-### Step 4: Correct the grammar
+### Step 4: Evaluate the model
 ```
 (torch_venv)
 python translate.py
 ```
+
 ## Transformer Quickstart
 
 ### Step 1: Preprocess the data
@@ -83,12 +84,22 @@ python prepare_csv.py \
        -val_r 0.2
 ```
 
-### Step 2: Train and evaluate the model
+### Step 2: Train the model
 ```
 (transformer_env)
 python transformer_allennlp.py
 ```
-### Batched Seq2seq Quickstart
+
+### Step 3: Evaluate the model
+```
+(transformer_env)
+python gleu.py \
+       -s ./source.txt 
+       -r ./target.txt \
+       --hyp ./pred.txt
+``` 
+
+## Batched Seq2seq Quickstart
 
 ### Step 1: Train the model
 ```
