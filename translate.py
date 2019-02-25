@@ -72,7 +72,10 @@ def evaluate(encoder, decoder, sentence, elmo_pair, input_lang, output_lang,  nn
         return decoded_words, decoder_attentions[:di + 1]
 
 
-def evaluateRandomly(encoder, decoder, sentence_pairs, elmo_pairs, input_lang, output_lang, nn_embedding, n=10):
+def evaluateRandomly(encoder, decoder, sentence_pairs, elmo_pairs, input_lang, output_lang, nn_embedding, n=50):
+    f_source = open('source.txt', 'w')
+    f_target = open('target.txt', 'w')
+    f_pred = open('pred.txt', 'w')
     for i in range(n):
         sentence_pair = random.choice(sentence_pairs)
         elmo_pair = random.choice(elmo_pairs)
@@ -90,6 +93,11 @@ def evaluateRandomly(encoder, decoder, sentence_pairs, elmo_pairs, input_lang, o
         print(tokens_target)
         score = sentence_bleu([tokens_reference], tokens_target)
         print(score)
+
+        # calculate gleu score
+        f_source.write(sentence_pair[0] + '\n')
+        f_target.write(sentence_pair[1] + '\n')
+        f_pred.write(output_sentence + '\n')
 
 def showAttention(input_sentence, output_words, attentions):
     # Set up figure with colorbar
