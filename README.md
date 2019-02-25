@@ -93,7 +93,7 @@ python transformer_allennlp.py
 ### Step 3: Evaluate the model
 ```
 (transformer_env)
-python gleu.py \
+python ../evaluation/gleu.py \
        -s ./source.txt 
        -r ./target.txt \
        --hyp ./pred.txt
@@ -111,7 +111,7 @@ python seq2seq.py
 ### Step 2: Evaluate the model
 ```
 (batched_seq2seq_env)
-python ./data/gleu.py \
+python ../evaluation/gleu.py \
        -s ./data/source_test.txt 
        -r ./data/target_test0.txt \
           ./data/target_test1.txt \

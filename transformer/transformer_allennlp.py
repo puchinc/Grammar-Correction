@@ -15,7 +15,7 @@ to get train and val files:
        -val_r 0.2
 to run this code: python transformer.py
 to evaluate using gleu: 
-       python gleu.py \
+       python ../evaluation/gleu.py \
        -s source.txt 
        -r target.txt \
        --hyp pred.txt
@@ -82,9 +82,9 @@ def main():
                       iterator=iterator,
                       train_dataset=train_dataset,
                       validation_dataset=validation_dataset,
-                      num_epochs=1,
+                      num_epochs=50,
                       cuda_device=CUDA_DEVICE)
-    num_epochs = 50
+    num_epochs = 100
     for i in range(num_epochs):
         print('Epoch: {}'.format(i))
         trainer.train()
@@ -94,7 +94,7 @@ def main():
         source_sentences = []
         target_sentences = []
         pred_sentences = []
-        for instance in itertools.islice(validation_dataset, 10):
+        for instance in itertools.islice(validation_dataset, 60):
             print('SOURCE:', instance.fields['source_tokens'].tokens)
             print('GOLD:', instance.fields['target_tokens'].tokens)
             print('PRED:', predictor.predict_instance(instance)['predicted_tokens'])
