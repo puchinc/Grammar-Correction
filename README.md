@@ -38,7 +38,23 @@ You need three virtualenvs named allennlp, torch, and transformer\_env. allennlp
 
         pip install -r batched_seq2seq/requirements.txt
         python -m spacy download en_core_web_lg
+    
+[BERT] https://github.com/huggingface/pytorch-pretrained-BERT
+* bert
+        
+        pip install pytorch-pretrained-bert
+        
+## BERT Embedding
 
+### Train word embeddings
+```
+(bert_venv)
+python emb/bert.py --input_file data/test/lang8_small.txt \
+        --output_file data/embeddings/lang8_small.bert \
+        --bert_mode bert-base-uncased \
+        --do_lower_case \
+        --batch_size 16
+```
 ## ELMo Quickstart
 
 ### Step 1: Preprocess the data

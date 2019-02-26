@@ -252,29 +252,7 @@ def main():
     all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
     all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
     all_example_index = torch.arange(all_input_ids.size(0), dtype=torch.long)
-
-    '''
-    model.eval()
-
-    all_encoder_layers, _ = model(input_ids, token_type_ids=None, attention_mask=input_mask)
-    tensor = all_encoder_layers[1][0].data
-
-    # pairs = [[['First', 'sentence', '.'], ['Another', '.']]]
-    # Read the file and split into lines
-    lines = open(args.input_file, encoding='utf-8').read().strip().split('\n')
-
-    # Split every line into pairs and normalize and then split to words
-    pairs = [[[e for e in normalizeString(s).split(' ')] for s in l.split('\t')] for l in lines]
-    pairs = pairs[:100]
-
-    # (bert, text) pairs
-    embeddings = [[tensor, pair[1]] for pair in pairs]
-
-    with open(emb_path, 'wb') as file:
-        pickle.dump(embeddings, file)
-    '''
-
-     #original bert.py
+    
     eval_data = TensorDataset(all_input_ids, all_input_mask, all_example_index)
     if args.local_rank == -1:
         eval_sampler = SequentialSampler(eval_data)
@@ -283,7 +261,6 @@ def main():
     eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.batch_size)
 
     model.eval()
-    #with open(args.output_file, "w", encoding='utf-8') as writer:
     with open(args.output_file, "wb") as file:
         for input_ids, input_mask, example_indices in eval_dataloader:
             input_ids = input_ids.to(device)
@@ -292,8 +269,8 @@ def main():
             all_encoder_layers, _ = model(input_ids, token_type_ids=None, attention_mask=input_mask, output_all_encoded_layers=False)
             all_encoder_layers = all_encoder_layers
 
-            #print(all_encoder_layers)
             pickle.dump(all_encoder_layers, file)
+            
             '''
             for b, example_index in enumerate(example_indices):
                 feature = features[example_index.item()]
