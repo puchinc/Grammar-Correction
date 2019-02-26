@@ -26,6 +26,7 @@ You need three virtualenvs named allennlp, torch, and transformer\_env. allennlp
         pip install torchvision
         pip install matplotlib
         pip install nltk
+        pip install scipy
 
 [Transformer] http://www.realworldnlpbook.com/blog/building-seq2seq-machine-translation-models-using-allennlp.html
 * transformer\_env
@@ -67,6 +68,10 @@ python train.py \
 ```
 (torch_venv)
 python translate.py
+python evaluation/gleu.py  \
+       -s ./source.txt \
+       -r ./target.txt \
+       --hyp ./pred.txt
 ```
 
 ## Transformer Quickstart
@@ -93,7 +98,7 @@ python transformer_allennlp.py
 ### Step 3: Evaluate the model
 ```
 (transformer_env)
-python gleu.py \
+python ../evaluation/gleu.py \
        -s ./source.txt 
        -r ./target.txt \
        --hyp ./pred.txt
@@ -111,7 +116,7 @@ python seq2seq.py
 ### Step 2: Evaluate the model
 ```
 (batched_seq2seq_env)
-python ./data/gleu.py \
+python ../evaluation/gleu.py \
        -s ./data/source_test.txt 
        -r ./data/target_test0.txt \
           ./data/target_test1.txt \

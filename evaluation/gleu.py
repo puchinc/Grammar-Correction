@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# reference: https://github.com/keisks/jfleg/blob/master/eval/gleu.py
 """
 (Note: This script computes sentence-level GLEU score.)
 This script calculates the GLEU score of a sentence, as described in
