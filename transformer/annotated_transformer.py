@@ -1,7 +1,11 @@
 # reference: http://nlp.seas.harvard.edu/2018/04/03/attention.html
 
-# prelims
+# prelims:
 # pip install http://download.pytorch.org/whl/cu80/torch-0.3.0.post4-cp36-cp36m-linux_x86_64.whl numpy matplotlib spacy torchtext seaborn 
+# python -m spacy download en 
+
+# usage:
+# python annotated_transformer.py
 
 import numpy as np
 import torch
@@ -15,6 +19,7 @@ import spacy
 
 import os
 import sys
+import random
 
 ##############################
 #      Model Architecture    #
@@ -52,7 +57,6 @@ class Generator(nn.Module):
 
     def forward(self, x):
         return F.log_softmax(self.proj(x), dim=-1)
-
 
 ##############################
 # Encoder and Decoder Stacks #
@@ -478,6 +482,7 @@ def greedy_decode(model, src, src_mask, max_len, start_symbol):
 
 class MyIterator(data.Iterator):
     def create_batches(self):
+        print("BATCH SIZE: ", self.batch_size * 100)
         if self.train:
             def pool(d, random_shuffler):
                 for p in data.batch(d, self.batch_size * 100):
@@ -499,99 +504,7 @@ def rebatch(pad_idx, batch):
     src, trg = batch.src.transpose(0, 1), batch.trg.transpose(0, 1)
     return Batch(src, trg, pad_idx)
 
-
-######################
-# Multi-GPU Training #           
-######################
-
-class MultiGPULossCompute:
-    "A multi-gpu loss compute and train function."
-    def __init__(self, generator, criterion, devices, opt=None, chunk_size=5):
-        # Send out to different gpus.
-        self.generator = generator
-        self.criterion = nn.parallel.replicate(criterion, 
-                                               devices=devices)
-        self.opt = opt
-        self.devices = devices
-        self.chunk_size = chunk_size
-        
-    def __call__(self, out, targets, normalize):
-        total = 0.0
-        generator = nn.parallel.replicate(self.generator, 
-                                                devices=self.devices)
-        out_scatter = nn.parallel.scatter(out, 
-                                          target_gpus=self.devices)
-        out_grad = [[] for _ in out_scatter]
-        targets = nn.parallel.scatter(targets, 
-                                      target_gpus=self.devices)
-
-        # Divide generating into chunks.
-        chunk_size = self.chunk_size
-        for i in range(0, out_scatter[0].size(1), chunk_size):
-            # Predict distributions
-            out_column = [[Variable(o[:, i:i+chunk_size].data, 
-                                    requires_grad=self.opt is not None)] 
-                           for o in out_scatter]
-            gen = nn.parallel.parallel_apply(generator, out_column)
-
-            # Compute loss. 
-            y = [(g.contiguous().view(-1, g.size(-1)), 
-                  t[:, i:i+chunk_size].contiguous().view(-1)) 
-                 for g, t in zip(gen, targets)]
-            loss = nn.parallel.parallel_apply(self.criterion, y)
-
-            # Sum and normalize loss
-            l = nn.parallel.gather(loss, 
-                                   target_device=self.devices[0])
-            l = l.sum() / normalize
-            total += l.item()
-
-            # Backprop loss to output of transformer
-            if self.opt is not None:
-                l.backward()
-                for j, l in enumerate(loss):
-                    out_grad[j].append(out_column[j][0].grad.data.clone())
-
-        # Backprop all loss through transformer.            
-        if self.opt is not None:
-            out_grad = [Variable(torch.cat(og, dim=1)) for og in out_grad]
-            o1 = out
-            o2 = nn.parallel.gather(out_grad, 
-                                    target_device=self.devices[0])
-            o1.backward(gradient=o2)
-            self.opt.step()
-            self.opt.optimizer.zero_grad()
-        return total * normalize
-
-
 def main():
-
-    #####################
-    #  Greedy Decoding  #
-    #####################
-
-    # Train the simple copy task.
-    # V = 11
-    # criterion = LabelSmoothing(size=V, padding_idx=0, smoothing=0.0)
-    # model = make_model(V, V, N=2)
-    # model_opt = NoamOpt(model.src_embed[0].d_model, 1, 400,
-            # torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
-
-    # for epoch in range(10):
-        # model.train()
-        # run_epoch(data_gen(V, 30, 20), model,
-                  # SimpleLossCompute(model.generator, criterion, model_opt))
-        # model.eval()
-        # print(run_epoch(data_gen(V, 30, 5), model,
-                        # SimpleLossCompute(model.generator, criterion, None)))
-
-    # model.eval()
-    # src = Variable(torch.LongTensor([[1,2,3,4,5,6,7,8,9,10]]) )
-    # src_mask = Variable(torch.ones(1, 1, 10) )
-    # print(greedy_decode(model, src, src_mask, max_len=10, start_symbol=1))
-
-    # sys.exit()
-
     #####################
     #   Data Loading    #
     #####################
@@ -608,72 +521,66 @@ def main():
                      eos_token = EOS_WORD, pad_token=BLANK_WORD)
 
     MAX_LEN = 100
-    train = datasets.TranslationDataset(path='../data/test/lang8_small.train', 
+    train = datasets.TranslationDataset(path='../data/src/lang8.train', 
             exts=('.src', '.trg'), fields=(TEXT, TEXT))
-    val = datasets.TranslationDataset(path='../data/test/lang8_small.val', 
+    val = datasets.TranslationDataset(path='../data/src/lang8.val', 
             exts=('.src', '.trg'), fields=(TEXT, TEXT))
-    test = datasets.TranslationDataset(path='../data/test/lang8_small.test', 
+    test = datasets.TranslationDataset(path='../data/src/lang8.test', 
             exts=('.src', '.trg'), fields=(TEXT, TEXT))
-    print(train[0].src)
-    print(train[0].trg)
+    random_idx = random.randint(0, len(train) - 1)
+    print(train[random_idx].src)
+    print(train[random_idx].trg)
 
     MIN_FREQ = 2
     TEXT.build_vocab(train.src, min_freq=MIN_FREQ)
 
-    # GPUs to use
-    # num2cuda = lambda x: torch.device("cuda" if torch.cuda.is_available() else "cpu", int(x))
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # device_ids = [0, 1, 2, 3]
-    # devices = [num2cuda(id_) for id_ in device_ids]
+    # GPU to use
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
 
     pad_idx = TEXT.vocab.stoi["<blank>"]
     model = make_model(len(TEXT.vocab), len(TEXT.vocab), N=6)
-    model.cuda()
+    model_path = "../data/models/transformer.pt"
+    # model.cuda()
     criterion = LabelSmoothing(size=len(TEXT.vocab), padding_idx=pad_idx, smoothing=0.1)
-    criterion.cuda()
+    # criterion.cuda()
     BATCH_SIZE = 1200
+    EPOCHES = 10000
     train_iter = MyIterator(train, batch_size=BATCH_SIZE, device=device,
                             repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
                             batch_size_fn=batch_size_fn, train=True)
     valid_iter = MyIterator(val, batch_size=BATCH_SIZE, device=device,
                             repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
                             batch_size_fn=batch_size_fn, train=False)
-    # model_par = nn.DataParallel(model, device_ids=device_ids)
 
     ##########################
     #   Training the System  #
     ##########################
 
-    model_opt = NoamOpt(model.src_embed[0].d_model, 1, 2000,
-            torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
-    for epoch in range(10):
-        model.train()
-        run_epoch((rebatch(pad_idx, b) for b in train_iter), 
-                  model, 
-                  SimpleLossCompute(model.generator, criterion, model_opt))
-        model.eval()
-        loss = run_epoch((rebatch(pad_idx, b) for b in valid_iter), 
-                          model, 
-                          SimpleLossCompute(model.generator, criterion, model_opt))
+    
+    if not os.path.exists(model_path):
 
-    # model_opt = NoamOpt(model.src_embed[0].d_model, 1, 2000,
-            # torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
-    # for epoch in range(10):
-        # model_par.train()
-        # run_epoch((rebatch(pad_idx, b) for b in train_iter), 
-                  # model_par, 
-                  # MultiGPULossCompute(model.generator, criterion, 
-                                      # devices=devices, opt=model_opt))
-        # model_par.eval()
-        # loss = run_epoch((rebatch(pad_idx, b) for b in valid_iter), 
-                          # model_par, 
-                          # MultiGPULossCompute(model.generator, criterion, 
-                          # devices=devices, opt=None))
+        model_opt = NoamOpt(model.src_embed[0].d_model, 1, 2000,
+                            torch.optim.Adam(model.parameters(), lr=0, 
+                            betas=(0.9, 0.98), eps=1e-9))
+        for epoch in range(EPOCHES):
+            model.train()
+            run_epoch((rebatch(pad_idx, b) for b in train_iter), 
+                      model, 
+                      SimpleLossCompute(model.generator, criterion, model_opt))
+            torch.save(model.state_dict(), model_path)
+
+            model.eval()
+            loss = run_epoch((rebatch(pad_idx, b) for b in valid_iter), 
+                              model, 
+                              SimpleLossCompute(model.generator, criterion, model_opt))
 
     ##########################
     #       Translation      #
     ##########################
 
+    model = make_model(len(TEXT.vocab), len(TEXT.vocab), N=6)
+    model.load_state_dict(torch.load(model_path))
     for i, batch in enumerate(valid_iter):
         src = batch.src.transpose(0, 1)[:1]
         src_mask = (src != TEXT.vocab.stoi["<blank>"]).unsqueeze(-2)
@@ -691,9 +598,7 @@ def main():
             if sym == "</s>": break
             print(sym, end =" ")
         print()
-        break
-
+        # break
 
 if __name__ == "__main__":
     main()
-

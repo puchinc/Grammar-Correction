@@ -322,6 +322,7 @@ def main():
         training_pairs = [tensorsFromBertText(random.choice(pairs), output_lang) for i in range(n_iters)]
     else:
     	training_pairs = [tensorsToDevice(random.choice(pairs)) for i in range(n_iters)]
+
     if nn_embedding:
         # use nn.embedding
         encoder = EncoderRNN(input_lang.n_words, hidden_size, 'nn.embedding').to(device)
@@ -332,6 +333,7 @@ def main():
         # use bert embedding
         encoder = EncoderRNN(bert_size, hidden_size).to(device)
     decoder = AttnDecoderRNN(hidden_size, output_lang.n_words).to(device)
+
     ''' 
     if os.path.isfile(encoder_path) and os.path.isfile(decoder_path):
         if torch.cuda.is_available():
