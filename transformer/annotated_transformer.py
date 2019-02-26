@@ -3,6 +3,12 @@
 # prelims
 # pip install http://download.pytorch.org/whl/cu80/torch-0.3.0.post4-cp36-cp36m-linux_x86_64.whl numpy matplotlib spacy torchtext seaborn 
 
+# train:
+# python annotated_transformer.py
+# evaluate:
+# python ../evaluation/gleu.py -s source.txt -r target.txt --hyp pred.txt
+
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -674,24 +680,54 @@ def main():
     #       Translation      #
     ##########################
 
+    f_source = open('source.txt', 'w')
+    f_target = open('target.txt', 'w')
+    f_pred = open('pred.txt', 'w')
+    count = 0
     for i, batch in enumerate(valid_iter):
+        # source
         src = batch.src.transpose(0, 1)[:1]
+        print("Source:", end="\t")
+        source = ""
+        for i in range(1, batch.src.size(0)):
+            sym = TEXT.vocab.itos[batch.src.data[i, 0]]
+            if sym == "</s>": break
+            print(sym, end =" ")
+            source = source + sym + " "
+        print()
+        source = source + '\n'
+
+        # pred 
         src_mask = (src != TEXT.vocab.stoi["<blank>"]).unsqueeze(-2)
         out = greedy_decode(model, src, src_mask, 
                             max_len=60, start_symbol=TEXT.vocab.stoi["<s>"])
         print("Translation:", end="\t")
+        translation = ""
         for i in range(1, out.size(1)):
             sym = TEXT.vocab.itos[out[0, i]]
             if sym == "</s>": break
             print(sym, end =" ")
+            translation = translation + sym + " "
         print()
+        translation = translation + '\n'
+
+        # target 
         print("Target:", end="\t")
+        target = ""
         for i in range(1, batch.trg.size(0)):
             sym = TEXT.vocab.itos[batch.trg.data[i, 0]]
             if sym == "</s>": break
             print(sym, end =" ")
+            target = target + sym + " "
         print()
-        break
+        target = target + '\n'
+
+        f_source.write(source)
+        f_target.write(target)
+        f_pred.write(translation)
+        count += 1
+        if count == 10:
+            break
 
 
 if __name__ == "__main__":
