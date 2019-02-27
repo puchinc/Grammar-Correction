@@ -511,6 +511,10 @@ def rebatch(pad_idx, batch):
     return Batch(src, trg, pad_idx)
 
 def main():
+
+    root_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    src_dir = os.path.join(root_dir, 'data', 'src')
+
     #####################
     #   Data Loading    #
     #####################
@@ -527,11 +531,11 @@ def main():
                      eos_token = EOS_WORD, pad_token=BLANK_WORD)
 
     MAX_LEN = 100
-    train = datasets.TranslationDataset(path='../data/src/lang8.train', 
+    train = datasets.TranslationDataset(path=os.path.join(src_dir, 'lang8.train'),
             exts=('.src', '.trg'), fields=(TEXT, TEXT))
-    val = datasets.TranslationDataset(path='../data/src/lang8.val', 
+    val = datasets.TranslationDataset(path=os.path.join(src_dir, 'lang8.val'), 
             exts=('.src', '.trg'), fields=(TEXT, TEXT))
-    test = datasets.TranslationDataset(path='../data/src/lang8.test', 
+    test = datasets.TranslationDataset(path=os.path.join(src_dir, 'lang8.test'), 
             exts=('.src', '.trg'), fields=(TEXT, TEXT))
     random_idx = random.randint(0, len(train) - 1)
     print(train[random_idx].src)
@@ -546,7 +550,7 @@ def main():
 
     pad_idx = TEXT.vocab.stoi["<blank>"]
     model = make_model(len(TEXT.vocab), len(TEXT.vocab), N=6)
-    model_path = "../data/models/transformer.pt"
+    model_path = os.path.join(root_dir, 'data', 'models', 'transformer.pt')
     # model.cuda()
     criterion = LabelSmoothing(size=len(TEXT.vocab), padding_idx=pad_idx, smoothing=0.1)
     # criterion.cuda()
@@ -562,24 +566,21 @@ def main():
     ##########################
     #   Training the System  #
     ##########################
+    # if not os.path.exists(model_path):
+    model_opt = NoamOpt(model.src_embed[0].d_model, 1, 2000,
+                        torch.optim.Adam(model.parameters(), lr=0, 
+                        betas=(0.9, 0.98), eps=1e-9))
+    for epoch in range(EPOCHES):
+        model.train()
+        run_epoch((rebatch(pad_idx, b) for b in train_iter), 
+                  model, 
+                  SimpleLossCompute(model.generator, criterion, model_opt))
+        torch.save(model.state_dict(), model_path)
 
-    
-    if not os.path.exists(model_path):
-
-        model_opt = NoamOpt(model.src_embed[0].d_model, 1, 2000,
-                            torch.optim.Adam(model.parameters(), lr=0, 
-                            betas=(0.9, 0.98), eps=1e-9))
-        for epoch in range(EPOCHES):
-            model.train()
-            run_epoch((rebatch(pad_idx, b) for b in train_iter), 
-                      model, 
-                      SimpleLossCompute(model.generator, criterion, model_opt))
-            torch.save(model.state_dict(), model_path)
-
-            model.eval()
-            loss = run_epoch((rebatch(pad_idx, b) for b in valid_iter), 
-                              model, 
-                              SimpleLossCompute(model.generator, criterion, model_opt))
+        model.eval()
+        loss = run_epoch((rebatch(pad_idx, b) for b in valid_iter), 
+                          model, 
+                          SimpleLossCompute(model.generator, criterion, model_opt))
 
     ##########################
     #       Translation      #
@@ -588,24 +589,27 @@ def main():
     model = make_model(len(TEXT.vocab), len(TEXT.vocab), N=6)
     model.load_state_dict(torch.load(model_path))
 
-    f_source = open('source.txt', 'w')
-    f_target = open('target.txt', 'w')
-    f_pred = open('pred.txt', 'w')
+    f_pred = open(os.path.join(src_dir, 'translation.txt'), 'w')
 
     for i, batch in enumerate(valid_iter):
         # source
         src = batch.src.transpose(0, 1)[:1]
         print("Source:", end="\t")
-        source = ""
         for i in range(1, batch.src.size(0)):
             sym = TEXT.vocab.itos[batch.src.data[i, 0]]
             if sym == "</s>": break
             print(sym, end =" ")
-            source = source + sym + " "
         print()
-        source = source + '\n'
 
-        # pred 
+        # target 
+        print("Target:", end="\t")
+        for i in range(1, batch.trg.size(0)):
+            sym = TEXT.vocab.itos[batch.trg.data[i, 0]]
+            if sym == "</s>": break
+            print(sym, end =" ")
+        print()
+
+        # translation 
         src_mask = (src != TEXT.vocab.stoi["<blank>"]).unsqueeze(-2)
         out = greedy_decode(model, src, src_mask, 
                             max_len=60, start_symbol=TEXT.vocab.stoi["<s>"])
@@ -619,20 +623,8 @@ def main():
         print()
         translation = translation + '\n'
 
-        # target 
-        print("Target:", end="\t")
-        target = ""
-        for i in range(1, batch.trg.size(0)):
-            sym = TEXT.vocab.itos[batch.trg.data[i, 0]]
-            if sym == "</s>": break
-            print(sym, end =" ")
-            target = target + sym + " "
         print()
 
-        target = target + '\n'
-
-        f_source.write(source)
-        f_target.write(target)
         f_pred.write(translation)
 
 if __name__ == "__main__":

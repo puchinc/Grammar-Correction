@@ -76,6 +76,51 @@ python evaluation/gleu.py  \
 
 ## Transformer Quickstart
 
+### Annotated Transformer
+
+### Step 1: Preprocess the data
+```
+awk -F $'\t' '{print $1}' data/src/lang8.txt > data/src/lang8.src 
+awk -F $'\t' '{print $2}' data/src/lang8.txt > data/src/lang8.trg
+cd data/src
+python ../../transformer/prepare_csv.py \
+       -i lang8.src \
+       -train lang8.train.src \
+       -train_r 0.6 \
+       -test lang8.test.src \
+       -test_r 0.2 \
+       -val lang8.val.src \
+       -val_r 0.2
+python ../../transformer/prepare_csv.py \
+       -i lang8.trg \
+       -train lang8.train.trg \
+       -train_r 0.6 \
+       -test lang8.test.trg \
+       -test_r 0.2 \
+       -val lang8.val.trg \
+       -val_r 0.2
+cd -
+```
+
+### Step 2: Train the model
+```
+(transformer_env)
+python transformer/transformer_allennlp.py
+```
+
+### Step 3: Evaluate the model
+```
+(transformer_env)
+python evaluation/gleu.py \
+       -s data/src/lang8.val.src
+       -r data/src/lang8.val.trg \
+       --hyp data/src/translation.txt
+``` 
+
+---
+
+### Allennlp Transformer
+
 ### Step 1: Preprocess the data
 ```
 cd transformer
