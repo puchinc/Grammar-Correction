@@ -2,13 +2,14 @@
 
 # This script parses lang-8 data file (lang-8-20111007-L1-v2.dat) and write to a new file with the format: learner_sentence \t corrected_sentence \n
 # reference: https://github.com/nusnlp/mlconvgec2018/blob/master/data/scripts/lang-8_scripts/extract.py
-# example usage: python lang8_parser.py -i lang-8-20111007-L1-v2.dat -o data/lang8_parsed -l2 English 
+# example usage: python lang8_parser.py -i lang-8-20111007-L1-v2.dat -o lang8_parsed -l2 English 
 # parsed file will be on lab machine 
 
 import argparse
 import os
 import sys
-import string 
+import string
+import re
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-i", "--input_file", dest="input_file", required=True, help="Lang8 file to be processed, in decoded format")
@@ -20,7 +21,7 @@ args = parser.parse_args()
 
 count = 0
 count_output = 0
-output_file = 'lang8'
+output_file = 'lang8_english'
 
 if not os.path.exists(args.output_dir):
     os.makedirs(args.output_dir)
@@ -71,9 +72,23 @@ with open(args.input_file) as f:
                             break
                         if correct_line[index].strip(string.punctuation) != '' and correct_line[index].strip(string.punctuation) != ' ' and correct_line[index].strip(string.punctuation) != '\n':
                             correct_line[index] = correct_line[index].split('","')[0]
-                            combined_sentence = token.strip(string.punctuation) + '\t' + correct_line[index].strip(string.punctuation)
-                            combined_sentence = combined_sentence.replace(']]]','')
-                            combined_sentence = combined_sentence.replace('\n','')
+                            # source
+                            source_sentence = token.strip(string.punctuation + " ")
+                            source_sentence = source_sentence.replace(']]]','')
+                            source_sentence = source_sentence.replace('\n','')
+                            source_sentence = re.sub('\..*','',source_sentence)
+                            source_sentence = re.sub('\!.*','',source_sentence)
+                            source_sentence = re.sub('\(.*','',source_sentence)
+                            source_sentence = re.sub('\).*','',source_sentence)
+                            # target
+                            target_sentence = correct_line[index].strip(string.punctuation + " ")
+                            target_sentence = target_sentence.replace(']]]','')
+                            target_sentence = target_sentence.replace('\n','')
+                            target_sentence = re.sub('\..*','',target_sentence)
+                            target_sentence = re.sub('\!.*','',target_sentence)
+                            target_sentence = re.sub('\(.*','',target_sentence)
+                            target_sentence = re.sub('\).*','',target_sentence)
+                            combined_sentence = source_sentence + '\t' + target_sentence
                             f_combined_out.write(combined_sentence + '\n') # a line for all index of correct_line.split
                             count_output += 1
                         index += 1
