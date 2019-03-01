@@ -29,7 +29,7 @@ def parse_args():
 
 def prepare_csv(input_file, file_names, data_ratio):
     num_lines = sum(1 for line in open(input_file))
-    data_size = [i * num_lines for i in data_ratio]
+    data_size = [int(i * num_lines) for i in data_ratio]
     data_type = 0
     count = 0
     csv = open(file_names[0], 'w')

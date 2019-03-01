@@ -84,7 +84,7 @@ python train.py \
 ```
 (torch_venv)
 python translate.py
-python evaluation/gleu.py  \
+python evaluation/gleu.py \
        -s ./source.txt \
        -r ./target.txt \
        --hyp ./pred.txt
@@ -128,7 +128,7 @@ python transformer/transformer_allennlp.py
 ```
 (transformer_env)
 python evaluation/gleu.py \
-       -s data/src/lang8.val.src
+       -s data/src/lang8.val.src \
        -r data/src/lang8.val.trg \
        --hyp data/src/translation.txt
 ``` 
@@ -160,7 +160,7 @@ python transformer_allennlp.py
 ```
 (transformer_env)
 python ../evaluation/gleu.py \
-       -s ./source.txt 
+       -s ./source.txt \
        -r ./target.txt \
        --hyp ./pred.txt
 ``` 

@@ -21,7 +21,7 @@ args = parser.parse_args()
 
 count = 0
 count_output = 0
-output_file = 'lang8_english'
+output_file = 'lang8'
 
 if not os.path.exists(args.output_dir):
     os.makedirs(args.output_dir)
@@ -89,6 +89,8 @@ with open(args.input_file) as f:
                             target_sentence = re.sub('\(.*','',target_sentence)
                             target_sentence = re.sub('\).*','',target_sentence)
                             combined_sentence = source_sentence + '\t' + target_sentence
+                            if '<unk>' in combined_sentence:
+                                continue
                             f_combined_out.write(combined_sentence + '\n') # a line for all index of correct_line.split
                             count_output += 1
                         index += 1

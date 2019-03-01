@@ -566,21 +566,21 @@ def main():
     ##########################
     #   Training the System  #
     ##########################
-    # if not os.path.exists(model_path):
-    model_opt = NoamOpt(model.src_embed[0].d_model, 1, 2000,
-                        torch.optim.Adam(model.parameters(), lr=0, 
-                        betas=(0.9, 0.98), eps=1e-9))
-    for epoch in range(EPOCHES):
-        model.train()
-        run_epoch((rebatch(pad_idx, b) for b in train_iter), 
-                  model, 
-                  SimpleLossCompute(model.generator, criterion, model_opt))
-        torch.save(model.state_dict(), model_path)
+    if not os.path.exists(model_path):
+        model_opt = NoamOpt(model.src_embed[0].d_model, 1, 2000,
+                            torch.optim.Adam(model.parameters(), lr=0, 
+                            betas=(0.9, 0.98), eps=1e-9))
+        for epoch in range(EPOCHES):
+            model.train()
+            run_epoch((rebatch(pad_idx, b) for b in train_iter), 
+                      model, 
+                      SimpleLossCompute(model.generator, criterion, model_opt))
+            torch.save(model.state_dict(), model_path)
 
-        model.eval()
-        loss = run_epoch((rebatch(pad_idx, b) for b in valid_iter), 
-                          model, 
-                          SimpleLossCompute(model.generator, criterion, model_opt))
+            model.eval()
+            loss = run_epoch((rebatch(pad_idx, b) for b in valid_iter), 
+                              model, 
+                              SimpleLossCompute(model.generator, criterion, model_opt))
 
     ##########################
     #       Translation      #
@@ -591,6 +591,7 @@ def main():
 
     f_pred = open(os.path.join(src_dir, 'translation.txt'), 'w')
 
+    translation = ""
     for i, batch in enumerate(valid_iter):
         # source
         src = batch.src.transpose(0, 1)[:1]
@@ -614,7 +615,6 @@ def main():
         out = greedy_decode(model, src, src_mask, 
                             max_len=60, start_symbol=TEXT.vocab.stoi["<s>"])
         print("Translation:", end="\t")
-        translation = ""
         for i in range(1, out.size(1)):
             sym = TEXT.vocab.itos[out[0, i]]
             if sym == "</s>": break
