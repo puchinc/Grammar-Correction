@@ -1,17 +1,16 @@
-# reference: http://nlp.seas.harvard.edu/2018/04/03/attention.html
+# Reference: 
+# codebase: http://nlp.seas.harvard.edu/2018/04/03/attention.html
+# torchtext load pretrained embeddings: http://anie.me/On-Torchtext/
 
-# prelims:
+# Prelims:
 # pip install http://download.pytorch.org/whl/cu80/torch-0.3.0.post4-cp36-cp36m-linux_x86_64.whl numpy matplotlib spacy torchtext seaborn 
 # python -m spacy download en 
 
-# usage:
+# Train:
 # python annotated_transformer.py
 
-# train:
-# python annotated_transformer.py
-# evaluate:
+# Evaluate:
 # python ../evaluation/gleu.py -s source.txt -r target.txt --hyp pred.txt
-
 
 import numpy as np
 import torch
@@ -233,10 +232,13 @@ class PositionwiseFeedForward(nn.Module):
 #############################
 
 class Embeddings(nn.Module):
-    def __init__(self, d_model, vocab):
+    def __init__(self, d_model, vocab, weight=None):
         super(Embeddings, self).__init__()
-        self.lut = nn.Embedding(vocab, d_model)
         self.d_model = d_model
+        if weight is not None:
+            self.lut = nn.Embedding.from_pretrained(weight)
+        else:
+            self.lut = nn.Embedding(vocab, d_model)
 
     def forward(self, x):
         return self.lut(x) * math.sqrt(self.d_model)
@@ -272,9 +274,10 @@ class PositionalEncoding(nn.Module):
 #      Full Model      #
 ########################
 
-def make_model(src_vocab, tgt_vocab, N=6, 
-               d_model=512, d_ff=2048, h=8, dropout=0.1):
+def make_model(vocab_size, N=6, d_model=512, d_ff=2048, h=8, 
+        dropout=0.1, emb_weight=None):
     "Helper: Construct a model from hyperparameters."
+    src_vocab = trg_vocab = vocab_size
     c = copy.deepcopy
     attn = MultiHeadedAttention(h, d_model)
     ff = PositionwiseFeedForward(d_model, d_ff, dropout)
@@ -283,9 +286,11 @@ def make_model(src_vocab, tgt_vocab, N=6,
         Encoder(EncoderLayer(d_model, c(attn), c(ff), dropout), N),
         Decoder(DecoderLayer(d_model, c(attn), c(attn), 
                              c(ff), dropout), N),
-        nn.Sequential(Embeddings(d_model, src_vocab), c(position)),
-        nn.Sequential(Embeddings(d_model, tgt_vocab), c(position)),
-        Generator(d_model, tgt_vocab))
+        nn.Sequential(Embeddings(d_model, src_vocab, 
+            weight=emb_weight), c(position)),
+        nn.Sequential(Embeddings(d_model, src_vocab, 
+            weight=emb_weight), c(position)),
+        Generator(d_model, trg_vocab))
     
     # This was important from their code. 
     # Initialize parameters with Glorot / fan_avg.
@@ -293,9 +298,6 @@ def make_model(src_vocab, tgt_vocab, N=6,
         if p.dim() > 1:
             nn.init.xavier_uniform_(p)
     return model
-
-tmp_model = make_model(10, 10, 2)
-
 
 ######################
 #     TRAINING       #
@@ -428,26 +430,6 @@ class LabelSmoothing(nn.Module):
         self.true_dist = true_dist
         return self.criterion(x, Variable(true_dist, requires_grad=False))
 
-crit = LabelSmoothing(5, 0, 0.1)
-def loss(x):
-    d = x + 3 * 1
-    predict = torch.FloatTensor([[0, x / d, 1 / d, 1 / d, 1 / d],
-                                 ])
-    #print(predict)
-    return crit(Variable(predict.log()),
-                 Variable(torch.LongTensor([1]))).data[0]
-
-""" Synthetic Data """
-
-def data_gen(V, batch, nbatches):
-    "Generate random data for a src-tgt copy task."
-    for i in range(nbatches):
-        data = torch.from_numpy(np.random.randint(1, V, size=(batch, 10)))
-        data[:, 0] = 1
-        src = Variable(data, requires_grad=False)
-        tgt = Variable(data, requires_grad=False)
-        yield Batch(src, tgt, 0)
-
 """ Loss Computation """
 
 class SimpleLossCompute:
@@ -510,10 +492,26 @@ def rebatch(pad_idx, batch):
     src, trg = batch.src.transpose(0, 1), batch.trg.transpose(0, 1)
     return Batch(src, trg, pad_idx)
 
+
+BOS_WORD = '<s>'
+EOS_WORD = '</s>'
+BLANK_WORD = "<blank>"
+
+# EMB_DIM should be multiple of 8
+EMB = 'glove.6B.200d'
+EMB_DIM = 512
+BATCH_SIZE = 1200
+EPOCHES = 5000
+
 def main():
 
+    # GPU to use
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = ("cpu")
+
     root_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
-    src_dir = os.path.join(root_dir, 'data', 'src')
+    src_dir = os.path.join(root_dir, 'data/src')
+    model_path = os.path.join(root_dir, 'data/models', EMB + '.transformer.pt')
 
     #####################
     #   Data Loading    #
@@ -524,9 +522,6 @@ def main():
     def tokenize_en(text):
         return [tok.text for tok in spacy_en.tokenizer(text)]
 
-    BOS_WORD = '<s>'
-    EOS_WORD = '</s>'
-    BLANK_WORD = "<blank>"
     TEXT = data.Field(tokenize=tokenize_en, init_token = BOS_WORD,
                      eos_token = EOS_WORD, pad_token=BLANK_WORD)
 
@@ -541,25 +536,31 @@ def main():
     print(train[random_idx].src)
     print(train[random_idx].trg)
 
-    MIN_FREQ = 2
-    TEXT.build_vocab(train.src, min_freq=MIN_FREQ)
+    # glove embedding
+    if 'glove' in EMB:
+        TEXT.build_vocab(train.src, vectors=EMB)
+        weight = TEXT.vocab.vectors
+        EMB_DIM = TEXT.vocab.vectors.shape[1]
+    # TODO elmo embedding
+    # TODO bert embedding
+    else:
+        MIN_FREQ = 2
+        TEXT.build_vocab(train.src, min_freq=MIN_FREQ)
 
-    # GPU to use
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
+    model = make_model(len(TEXT.vocab), d_model=EMB_DIM, emb_weight=weight, N=6)
+    model.to(device)
 
     pad_idx = TEXT.vocab.stoi["<blank>"]
-    model = make_model(len(TEXT.vocab), len(TEXT.vocab), N=6)
-    model_path = os.path.join(root_dir, 'data', 'models', 'transformer.pt')
-    # model.cuda()
     criterion = LabelSmoothing(size=len(TEXT.vocab), padding_idx=pad_idx, smoothing=0.1)
-    # criterion.cuda()
-    BATCH_SIZE = 1200
-    EPOCHES = 10000
+    criterion.to(device)
+
     train_iter = MyIterator(train, batch_size=BATCH_SIZE, device=device,
                             repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
                             batch_size_fn=batch_size_fn, train=True)
     valid_iter = MyIterator(val, batch_size=BATCH_SIZE, device=device,
+                            repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
+                            batch_size_fn=batch_size_fn, train=False)
+    test_iter = MyIterator(test, batch_size=BATCH_SIZE, device=device,
                             repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
                             batch_size_fn=batch_size_fn, train=False)
 
@@ -576,6 +577,7 @@ def main():
                       model, 
                       SimpleLossCompute(model.generator, criterion, model_opt))
             torch.save(model.state_dict(), model_path)
+            print("Model saved at", model_path)
 
             model.eval()
             loss = run_epoch((rebatch(pad_idx, b) for b in valid_iter), 
@@ -586,46 +588,51 @@ def main():
     #       Translation      #
     ##########################
 
-    model = make_model(len(TEXT.vocab), len(TEXT.vocab), N=6)
+    model = make_model(len(TEXT.vocab), N=6)
     model.load_state_dict(torch.load(model_path))
+    model.to(device)
 
-    f_pred = open(os.path.join(src_dir, 'translation.txt'), 'w')
-
-    translation = ""
-    for i, batch in enumerate(valid_iter):
+    f_src = open(os.path.join(src_dir, 'lang8.eval.src'), 'w+')
+    f_trg = open(os.path.join(src_dir, 'lang8.eval.trg'), 'w+')
+    f_pred = open(os.path.join(src_dir, 'lang8.eval.pred'), 'w+')
+    
+    for i, batch in enumerate(test_iter):
         # source
         src = batch.src.transpose(0, 1)[:1]
-        print("Source:", end="\t")
+        source = ""
         for i in range(1, batch.src.size(0)):
             sym = TEXT.vocab.itos[batch.src.data[i, 0]]
             if sym == "</s>": break
-            print(sym, end =" ")
-        print()
+            source += sym + " "
+        source += '\n'
 
         # target 
-        print("Target:", end="\t")
+        target = ""
         for i in range(1, batch.trg.size(0)):
             sym = TEXT.vocab.itos[batch.trg.data[i, 0]]
             if sym == "</s>": break
-            print(sym, end =" ")
-        print()
+            target += sym + " "
+        target += '\n'
 
         # translation 
         src_mask = (src != TEXT.vocab.stoi["<blank>"]).unsqueeze(-2)
         out = greedy_decode(model, src, src_mask, 
                             max_len=60, start_symbol=TEXT.vocab.stoi["<s>"])
-        print("Translation:", end="\t")
+        pred = ""
         for i in range(1, out.size(1)):
             sym = TEXT.vocab.itos[out[0, i]]
             if sym == "</s>": break
-            print(sym, end =" ")
-            translation = translation + sym + " "
-        print()
-        translation = translation + '\n'
+            pred += sym + " "
+        pred += '\n'
 
-        print()
+        print("Source:", source, end='')
+        print("Target:", target, end='')
+        print("Translation:", pred)
+        f_src.write(source)
+        f_trg.write(target)
+        f_pred.write(pred)
 
-        f_pred.write(translation)
+    f_pred.close()
 
 if __name__ == "__main__":
     main()

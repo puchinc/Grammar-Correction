@@ -4,7 +4,7 @@
 # https://github.com/allenai/allennlp/blob/master/tutorials/how_to/elmo.md
 
 # Example Usage:
-#   python emb/elmo.py data/test/conll.txt data/embeddings/conll.elmo
+#   python emb/elmo.py data/test/conll.txt data/embs/conll.elmo
 
 
 import os
@@ -55,7 +55,7 @@ if __name__ == '__main__':
     else:
         # TEST SMALL DATASET
         sentence_path = '../data/src/conll.txt'
-        emb_path = '../data/embeddings/conll.elmo'
+        emb_path = '../data/embs/conll.elmo'
         pairs = loadConll(sentence_path)[:10]
 
     # no need to pretrain again
@@ -67,8 +67,8 @@ if __name__ == '__main__':
         os.makedirs(emb_dir)
     
     from allennlp.modules.elmo import Elmo, batch_to_ids
-    options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json" 
-    weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
+    options_file = "../data/embs/elmo_2x4096_512_2048cnn_2xhighway_options.json" 
+    weight_file = "../data/embs/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
     # explaination about num_output_representation = 2
     # https://github.com/allenai/allennlp/issues/1516
     elmo = Elmo(options_file, weight_file, 2, dropout=0)
