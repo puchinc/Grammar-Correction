@@ -317,8 +317,7 @@ class Batch:
         if trg is not None:
             self.trg = trg[:, :-1]
             self.trg_y = trg[:, 1:]
-            self.trg_mask = \
-                self.make_std_mask(self.trg, pad)
+            self.trg_mask = self.make_std_mask(self.trg, pad)
             self.ntokens = (self.trg_y != pad).data.sum().item()
     
     @staticmethod
@@ -442,12 +441,72 @@ class SimpleLossCompute:
     # change loss.data[0] to loss.item() due to pytorch new version. do the same thing for norm
     def __call__(self, x, y, norm):
         x = self.generator(x)
-        loss = self.criterion(x.contiguous().view(-1, x.size(-1)), y.contiguous().view(-1)) / norm
+        loss = self.criterion(x.contiguous().view(-1, x.size(-1)), 
+                              y.contiguous().view(-1)) / norm
         loss.backward()
         if self.opt is not None:
             self.opt.step()
             self.opt.optimizer.zero_grad()
         return loss.item() * norm
+
+class MultiGPULossCompute:
+    "A multi-gpu loss compute and train function."
+    def __init__(self, generator, criterion, devices, opt=None, chunk_size=5):
+        # Send out to different gpus.
+        self.generator = generator
+        self.criterion = nn.parallel.replicate(criterion, 
+                                               devices=devices)
+        self.opt = opt
+        self.devices = devices
+        self.chunk_size = chunk_size
+        
+    def __call__(self, out, targets, normalize):
+        total = 0.0
+        generator = nn.parallel.replicate(self.generator, 
+                                                devices=self.devices)
+        out_scatter = nn.parallel.scatter(out, 
+                                          target_gpus=self.devices)
+        out_grad = [[] for _ in out_scatter]
+        targets = nn.parallel.scatter(targets, 
+                                      target_gpus=self.devices)
+
+        # Divide generating into chunks.
+        chunk_size = self.chunk_size
+        for i in range(0, out_scatter[0].size(1), chunk_size):
+            # Predict distributions
+            out_column = [[Variable(o[:, i:i+chunk_size].data, 
+                                    requires_grad=self.opt is not None)] 
+                           for o in out_scatter]
+            gen = nn.parallel.parallel_apply(generator, out_column)
+
+            # Compute loss. 
+            y = [(g.contiguous().view(-1, g.size(-1)), 
+                  t[:, i:i+chunk_size].contiguous().view(-1)) 
+                 for g, t in zip(gen, targets)]
+            loss = nn.parallel.parallel_apply(self.criterion, y)
+
+            # Sum and normalize loss
+            l = nn.parallel.gather(loss, 
+                                   target_device=self.devices[0])
+            l = l.sum()[0] / normalize
+            total += l.item()
+
+            # Backprop loss to output of transformer
+            if self.opt is not None:
+                l.backward()
+                for j, l in enumerate(loss):
+                    out_grad[j].append(out_column[j][0].grad.data.clone())
+
+        # Backprop all loss through transformer.            
+        if self.opt is not None:
+            out_grad = [Variable(torch.cat(og, dim=1)) for og in out_grad]
+            o1 = out
+            o2 = nn.parallel.gather(out_grad, 
+                                    target_device=self.devices[0])
+            o1.backward(gradient=o2)
+            self.opt.step()
+            self.opt.optimizer.zero_grad()
+        return total * normalize
 
 def greedy_decode(model, src, src_mask, max_len, start_symbol):
     memory = model.encode(src, src_mask)
@@ -459,7 +518,7 @@ def greedy_decode(model, src, src_mask, max_len, start_symbol):
                                     .type_as(src.data)))
         prob = model.generator(out[:, -1])
         _, next_word = torch.max(prob, dim = 1)
-        next_word = next_word.data[0]
+        next_word = next_word.item()
         ys = torch.cat([ys, 
                         torch.ones(1, 1).type_as(src.data).fill_(next_word)], dim=1)
     return ys
@@ -492,26 +551,33 @@ def rebatch(pad_idx, batch):
     src, trg = batch.src.transpose(0, 1), batch.trg.transpose(0, 1)
     return Batch(src, trg, pad_idx)
 
-
-BOS_WORD = '<s>'
-EOS_WORD = '</s>'
-BLANK_WORD = "<blank>"
-
-# EMB_DIM should be multiple of 8
-EMB = 'glove.6B.200d'
-EMB_DIM = 512
-BATCH_SIZE = 1200
-EPOCHES = 5000
-
 def main():
+    BOS_WORD = '<s>'
+    EOS_WORD = '</s>'
+    BLANK_WORD = "<blank>"
+
+    # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
+    EMB = ''
+    # EMB = 'glove.6B.200d'
+    EMB_DIM = 512
+    BATCH_SIZE = 1000
+    EPOCHES = 5
 
     # GPU to use
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    devices = [0, 1, 2, 3]
     # device = ("cpu")
 
     root_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
     src_dir = os.path.join(root_dir, 'data/src')
+    test_dir = os.path.join(root_dir, 'data/test')
+    eval_dir = os.path.join(root_dir, 'data/eval')
     model_path = os.path.join(root_dir, 'data/models', EMB + '.transformer.pt')
+
+    if not os.path.exists(src_dir):
+        os.makedirs(src_dir)
+    if not os.path.exists(eval_dir):
+        os.makedirs(eval_dir)
 
     #####################
     #   Data Loading    #
@@ -536,6 +602,7 @@ def main():
     print(train[random_idx].src)
     print(train[random_idx].trg)
 
+    weight = None
     # glove embedding
     if 'glove' in EMB:
         TEXT.build_vocab(train.src, vectors=EMB)
@@ -546,6 +613,8 @@ def main():
     else:
         MIN_FREQ = 2
         TEXT.build_vocab(train.src, min_freq=MIN_FREQ)
+
+    # TODO torchtext load customized pretrained weights
 
     model = make_model(len(TEXT.vocab), d_model=EMB_DIM, emb_weight=weight, N=6)
     model.to(device)
@@ -567,22 +636,25 @@ def main():
     ##########################
     #   Training the System  #
     ##########################
-    if not os.path.exists(model_path):
-        model_opt = NoamOpt(model.src_embed[0].d_model, 1, 2000,
-                            torch.optim.Adam(model.parameters(), lr=0, 
-                            betas=(0.9, 0.98), eps=1e-9))
-        for epoch in range(EPOCHES):
-            model.train()
-            run_epoch((rebatch(pad_idx, b) for b in train_iter), 
-                      model, 
-                      SimpleLossCompute(model.generator, criterion, model_opt))
-            torch.save(model.state_dict(), model_path)
-            print("Model saved at", model_path)
+    # if not os.path.exists(model_path):
 
-            model.eval()
-            loss = run_epoch((rebatch(pad_idx, b) for b in valid_iter), 
-                              model, 
-                              SimpleLossCompute(model.generator, criterion, model_opt))
+    model_par = nn.DataParallel(model, device_ids=devices)
+    model_opt = NoamOpt(model.src_embed[0].d_model, 1, 2000,
+                        torch.optim.Adam(model.parameters(), lr=0, 
+                        betas=(0.9, 0.98), eps=1e-9))
+    for epoch in range(EPOCHES):
+        model_par.train()
+        run_epoch((rebatch(pad_idx, b) for b in train_iter), 
+                  model_par, 
+                  SimpleLossCompute(model.generator, criterion, model_opt))
+        torch.save(model.state_dict(), model_path)
+        print("Model saved at", model_path)
+
+        model_par.eval()
+        loss = run_epoch((rebatch(pad_idx, b) for b in valid_iter), 
+                          model_par, 
+                          SimpleLossCompute(model.generator, criterion, model_opt))
+        print(loss)
 
     ##########################
     #       Translation      #
@@ -592,9 +664,9 @@ def main():
     model.load_state_dict(torch.load(model_path))
     model.to(device)
 
-    f_src = open(os.path.join(src_dir, 'lang8.eval.src'), 'w+')
-    f_trg = open(os.path.join(src_dir, 'lang8.eval.trg'), 'w+')
-    f_pred = open(os.path.join(src_dir, 'lang8.eval.pred'), 'w+')
+    f_src = open(os.path.join(eval_dir, 'lang8.eval.src'), 'w+')
+    f_trg = open(os.path.join(eval_dir, 'lang8.eval.trg'), 'w+')
+    f_pred = open(os.path.join(eval_dir, 'lang8.eval.pred'), 'w+')
     
     for i, batch in enumerate(test_iter):
         # source
