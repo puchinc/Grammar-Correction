@@ -722,7 +722,7 @@ def train(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens,
     return loss.item(), pred_seqs, attention_weights, num_corrects, num_words,\
            encoder_grad_norm, decoder_grad_norm, clipped_encoder_grad_norm, clipped_decoder_grad_norm
 
-def training(encoder, decoder, encoder_optim, decoder_optim, train_iter, valid_iter, opts):
+def training(encoder, decoder, encoder_optim, decoder_optim, train_iter, valid_iter, opts, load_checkpoint, checkpoint):
     """ Open port 6006 and see tensorboard.
     Ref:  https://medium.com/@dexterhuang/%E7%B5%A6-pytorch-%E7%94%A8%E7%9A%84-tensorboard-bb341ce3f837
     """
@@ -744,8 +744,7 @@ def training(encoder, decoder, encoder_optim, decoder_optim, train_iter, valid_i
     print_every_step = opts.print_every_step
     save_every_step = opts.save_every_step
     # For saving checkpoint and tensorboard
-    LOAD_CHECKPOINT = False
-    global_step = 0 if not LOAD_CHECKPOINT else checkpoint['global_step']
+    global_step = 0 if not load_checkpoint else checkpoint['global_step']
 
     # --------------------------
     # Start training
@@ -988,7 +987,7 @@ def translate(src_text, train_dataset, encoder, decoder, max_seq_len, replace_un
             if token_id == UNK and replace_unk:
                 # Replace unk by selecting the source token with the highest attention score.
                 score, idx = all_attention_weights[t].max(0)
-                token = src_sent[idx[0]]
+                token = src_sent[idx.item()]
             else:
                 # <UNK>
                 token = train_dataset.tgt_vocab.id2token[token_id.item()]
@@ -1009,8 +1008,8 @@ def translate(src_text, train_dataset, encoder, decoder, max_seq_len, replace_un
     return src_text, out_text, all_attention_weights[:len(out_sent)]
 
 def main():
-    train_dataset = NMTDataset(src_path='./data/lang8_english_src_10k.txt',
-                           tgt_path='./data/lang8_english_tgt_10k.txt')
+    train_dataset = NMTDataset(src_path='./data/lang8_english_src_100k.txt',
+                           tgt_path='./data/lang8_english_tgt_100k.txt')
     valid_dataset = NMTDataset(src_path='./data/source.txt',
                            tgt_path='./data/target_valid.txt',
                            src_vocab=train_dataset.src_vocab,
@@ -1030,11 +1029,20 @@ def main():
                         num_workers=4,
                         collate_fn=collate_fn)
     # If enabled, load checkpoint.
-    LOAD_CHECKPOINT = False
-
+    LOAD_CHECKPOINT = True
+    # initialize checkpoint
+    init = 0
+    checkpoint = {
+        'opts': init,
+        'global_step': init,
+        'encoder_state_dict': init,
+        'decoder_state_dict': init,
+        'encoder_optim_state_dict': init,
+        'decoder_optim_state_dict': init
+    }
     if LOAD_CHECKPOINT:
         # Modify this path.
-        checkpoint_path = './checkpoints/seq2seq_2018-02-07 20:30:47_acc_88.15_loss_12.85_step_135000.pt'
+        checkpoint_path = './checkpoints/seq2seq_2019-03-01 15:19:39_acc_0.00_loss_16.69_step_10410.pt'
         checkpoint = load_checkpoint(checkpoint_path)
         opts = checkpoint['opts']    
     else:
@@ -1063,122 +1071,122 @@ def main():
         opts.num_epochs = 5
         opts.print_every_step = 20
         opts.save_every_step = 5000
+	
+    print('='*100)
+    print('Options log:')
+    print('- Load from checkpoint: {}'.format(LOAD_CHECKPOINT))
+    if LOAD_CHECKPOINT: print('- Global step: {}'.format(checkpoint['global_step']))
+    for k,v in opts.items(): print('- {}: {}'.format(k, v))
+    print('='*100 + '\n')
         
-        print('='*100)
-        print('Options log:')
-        print('- Load from checkpoint: {}'.format(LOAD_CHECKPOINT))
-        if LOAD_CHECKPOINT: print('- Global step: {}'.format(checkpoint['global_step']))
-        for k,v in opts.items(): print('- {}: {}'.format(k, v))
-        print('='*100 + '\n')
-        
-        # Initialize vocabulary size.
-        src_vocab_size = len(train_dataset.src_vocab.token2id)
-        tgt_vocab_size = len(train_dataset.tgt_vocab.token2id)
+    # Initialize vocabulary size.
+    src_vocab_size = len(train_dataset.src_vocab.token2id)
+    tgt_vocab_size = len(train_dataset.tgt_vocab.token2id)
 
-        # Initialize embeddings.
-        # We can actually put all modules in one module like `NMTModel`)
-        # See: https://github.com/spro/practical-pytorch/issues/34
-        word_vec_size = opts.word_vec_size if not opts.pretrained_embeddings else nlp.vocab.vectors_length
-        src_embedding = nn.Embedding(src_vocab_size, word_vec_size, padding_idx=PAD)
-        tgt_embedding = nn.Embedding(tgt_vocab_size, word_vec_size, padding_idx=PAD)
+    # Initialize embeddings.
+    # We can actually put all modules in one module like `NMTModel`)
+    # See: https://github.com/spro/practical-pytorch/issues/34
+    word_vec_size = opts.word_vec_size if not opts.pretrained_embeddings else nlp.vocab.vectors_length
+    src_embedding = nn.Embedding(src_vocab_size, word_vec_size, padding_idx=PAD)
+    tgt_embedding = nn.Embedding(tgt_vocab_size, word_vec_size, padding_idx=PAD)
 
-        if opts.share_embeddings:
-            assert(src_vocab_size == tgt_vocab_size)
-            tgt_embedding.weight = src_embedding.weight
+    if opts.share_embeddings:
+        assert(src_vocab_size == tgt_vocab_size)
+        tgt_embedding.weight = src_embedding.weight
 
-        # Initialize models.
-        encoder = EncoderRNN(embedding=src_embedding,
+    # Initialize models.
+    encoder = EncoderRNN(embedding=src_embedding,
                              rnn_type=opts.rnn_type,
                              hidden_size=opts.hidden_size,
                              num_layers=opts.num_layers,
                              dropout=opts.dropout,
                              bidirectional=opts.bidirectional)
 
-        decoder = LuongAttnDecoderRNN(encoder, embedding=tgt_embedding,
+    decoder = LuongAttnDecoderRNN(encoder, embedding=tgt_embedding,
                                       attention=opts.attention,
                                       tie_embeddings=opts.tie_embeddings,
                                       dropout=opts.dropout)
 
-        if opts.pretrained_embeddings:
-            glove_embeddings = load_spacy_glove_embedding(nlp, train_dataset.src_vocab)
-            encoder.embedding.weight.data.copy_(glove_embeddings)
-            decoder.embedding.weight.data.copy_(glove_embeddings)
-            if opts.fixed_embeddings:
-                encoder.embedding.weight.requires_grad = False
-                decoder.embedding.weight.requires_grad = False
+    if opts.pretrained_embeddings:
+        glove_embeddings = load_spacy_glove_embedding(nlp, train_dataset.src_vocab)
+        encoder.embedding.weight.data.copy_(glove_embeddings)
+        decoder.embedding.weight.data.copy_(glove_embeddings)
+        if opts.fixed_embeddings:
+            encoder.embedding.weight.requires_grad = False
+            decoder.embedding.weight.requires_grad = False
 
-        if LOAD_CHECKPOINT:
-            encoder.load_state_dict(checkpoint['encoder_state_dict'])
-            decoder.load_state_dict(checkpoint['decoder_state_dict'])
+    if LOAD_CHECKPOINT:
+        encoder.load_state_dict(checkpoint['encoder_state_dict'])
+        decoder.load_state_dict(checkpoint['decoder_state_dict'])
 
-        # Move models to GPU (need time for initial run)
-        if USE_CUDA:
-            encoder.cuda()
-            decoder.cuda()
+    # Move models to GPU (need time for initial run)
+    if USE_CUDA:
+        encoder.cuda()
+        decoder.cuda()
             
-        FINE_TUNE = True
-        if FINE_TUNE:
-            encoder.embedding.weight.requires_grad = True  
+    FINE_TUNE = True
+    if FINE_TUNE:
+        encoder.embedding.weight.requires_grad = True  
             
-        print('='*100)
-        print('Model log:\n')
-        print(encoder)
-        print(decoder)
-        print('- Encoder input embedding requires_grad={}'.format(encoder.embedding.weight.requires_grad))
-        print('- Decoder input embedding requires_grad={}'.format(decoder.embedding.weight.requires_grad))
-        print('- Decoder output embedding requires_grad={}'.format(decoder.W_s.weight.requires_grad))
-        print('='*100 + '\n')
+    print('='*100)
+    print('Model log:\n')
+    print(encoder)
+    print(decoder)
+    print('- Encoder input embedding requires_grad={}'.format(encoder.embedding.weight.requires_grad))
+    print('- Decoder input embedding requires_grad={}'.format(decoder.embedding.weight.requires_grad))
+    print('- Decoder output embedding requires_grad={}'.format(decoder.W_s.weight.requires_grad))
+    print('='*100 + '\n')
         
-        # Initialize optimizers (we can experiment different learning rates)
-        encoder_optim = optim.Adam([p for p in encoder.parameters() if p.requires_grad], lr=opts.learning_rate, weight_decay=opts.weight_decay)
-        decoder_optim = optim.Adam([p for p in decoder.parameters() if p.requires_grad], lr=opts.learning_rate, weight_decay=opts.weight_decay)
+    # Initialize optimizers (we can experiment different learning rates)
+    encoder_optim = optim.Adam([p for p in encoder.parameters() if p.requires_grad], lr=opts.learning_rate, weight_decay=opts.weight_decay)
+    decoder_optim = optim.Adam([p for p in decoder.parameters() if p.requires_grad], lr=opts.learning_rate, weight_decay=opts.weight_decay)
         
-        # training
-        training(encoder, decoder, encoder_optim, decoder_optim, train_iter, valid_iter, opts)
+    # training
+    training(encoder, decoder, encoder_optim, decoder_optim, train_iter, valid_iter, opts, load_checkpoint, checkpoint)
         
-        total_loss = 0
-        total_corrects = 0
-        total_words = 0
+    total_loss = 0
+    total_corrects = 0
+    total_words = 0
 
-        for batch_id, batch_data in tqdm(enumerate(valid_iter)):
-            src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens = batch_data
+    for batch_id, batch_data in tqdm(enumerate(valid_iter)):
+        src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens = batch_data
 
-            loss, pred_seqs, attention_weights, num_corrects, num_words \
+        loss, pred_seqs, attention_weights, num_corrects, num_words \
                 = evaluate(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens, encoder, decoder, opts)
 
-            total_loss += loss
-            total_corrects += num_corrects
-            total_words += num_words
-            total_accuracy = 100 * (total_corrects / total_words)
+        total_loss += loss
+        total_corrects += num_corrects
+        total_words += num_words
+        total_accuracy = 100 * (total_corrects / total_words)
 
-        print('='*100)
-        print('Validation log:')
-        print('- Total loss: {}'.format(total_loss))
-        print('- Total corrects: {}'.format(total_corrects))
-        print('- Total words: {}'.format(total_words))
-        print('- Total accuracy: {}'.format(total_accuracy))
-        print('='*100 + '\n')
+    print('='*100)
+    print('Validation log:')
+    print('- Total loss: {}'.format(total_loss))
+    print('- Total corrects: {}'.format(total_corrects))
+    print('- Total words: {}'.format(total_words))
+    print('- Total accuracy: {}'.format(total_accuracy))
+    print('='*100 + '\n')
         
-        src_text, out_text, all_attention_weights = translate('He have a car', train_dataset, encoder, decoder, max_seq_len=opts.max_seq_len)
-        src_text, out_text, all_attention_weights
+    src_text, out_text, all_attention_weights = translate('He have a car', train_dataset, encoder, decoder, max_seq_len=opts.max_seq_len)
+    src_text, out_text, all_attention_weights
         
-        # check attention weight sum == 1
-        [all_attention_weights[t].sum() for t in range(all_attention_weights.size(0))]
+    # check attention weight sum == 1
+    [all_attention_weights[t].sum() for t in range(all_attention_weights.size(0))]
         
         
-        test_src_texts = []
-        with codecs.open('./data/source_test.txt', 'r', 'utf-8') as f:
-            test_src_texts = f.readlines()
-        print(test_src_texts[:5])
-        out_texts = []
-        for src_text in test_src_texts:
-            _, out_text, _ = translate(src_text.strip(), train_dataset, encoder, decoder, max_seq_len=opts.max_seq_len)
-            out_texts.append(out_text)
-        print(out_texts[:5])
-        with codecs.open('./data/pred.txt', 'w', 'utf-8') as f:
-            for text in out_texts:
-                f.write(text + '\n')
+    test_src_texts = []
+    with codecs.open('./data/source_test.txt', 'r', 'utf-8') as f:
+        test_src_texts = f.readlines()
+    print(test_src_texts[:5])
+    out_texts = []
+    for src_text in test_src_texts:
+        _, out_text, _ = translate(src_text.strip(), train_dataset, encoder, decoder, max_seq_len=opts.max_seq_len)
+        out_texts.append(out_text)
+    print(out_texts[:5])
+    with codecs.open('./data/pred.txt', 'w', 'utf-8') as f:
+        for text in out_texts:
+            f.write(text + '\n')
                 
-        # calculate gleu score: python ./data/gleu.py -s ./data/source_test.txt -r ./data/target_test0.txt ./data/target_test1.txt ./data/target_test2.txt ./data/target_test3.txt --hyp ./data/pred.txt
+    # calculate gleu score: python ./data/gleu.py -s ./data/source_test.txt -r ./data/target_test0.txt ./data/target_test1.txt ./data/target_test2.txt ./data/target_test3.txt --hyp ./data/pred.txt
 if __name__ == '__main__':
     main()
