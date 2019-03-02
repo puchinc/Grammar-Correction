@@ -21,7 +21,7 @@ python lang8_parser.py \
 awk -F $'\t' '{print $1}' data/src/lang8.txt > data/src/lang8.src 
 awk -F $'\t' '{print $2}' data/src/lang8.txt > data/src/lang8.trg
 cd data/src
-python ../../transformer/prepare_csv.py \
+python ../../prepare_csv.py \
        -i lang8.src \
        -train lang8.train.src \
        -train_r 0.6 \
@@ -29,7 +29,7 @@ python ../../transformer/prepare_csv.py \
        -test_r 0.2 \
        -val lang8.val.src \
        -val_r 0.2
-python ../../transformer/prepare_csv.py \
+python ../../prepare_csv.py \
        -i lang8.trg \
        -train lang8.train.trg \
        -train_r 0.6 \
