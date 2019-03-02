@@ -125,7 +125,7 @@ python evaluation/gleu.py \
 ### Step 1: Train the model
 ```
 (transformer_env)
-python transformer/annotated_transformer.py
+CUDA_VISIBLE_DEVICES=0,1,2,3 python transformer/annotated_transformer.py
 ```
 
 ### Step 2: Evaluate the model

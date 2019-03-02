@@ -347,7 +347,7 @@ def run_epoch(data_iter, model, loss_compute):
         tokens += batch.ntokens
         if i % 50 == 1:
             elapsed = time.time() - start
-            print("Epoch Step: %d Loss: %f Tokens per Sec: %f" %
+            print("Iteration: %d Loss: %f Tokens per Sec: %f" %
                     (i, loss / batch.ntokens, tokens / elapsed))
             start = time.time()
             tokens = 0
@@ -459,6 +459,11 @@ class MultiGPULossCompute:
         self.opt = opt
         self.devices = devices
         self.chunk_size = chunk_size
+
+    # replicas = nn.parallel.replicate(module, device_ids)
+    # inputs = nn.parallel.scatter(input, device_ids)
+    # replicas = replicas[:len(inputs)]
+    # outputs = nn.parallel.parallel_apply(replicas, inputs)
         
     def __call__(self, out, targets, normalize):
         total = 0.0
@@ -477,18 +482,22 @@ class MultiGPULossCompute:
             out_column = [[Variable(o[:, i:i+chunk_size].data, 
                                     requires_grad=self.opt is not None)] 
                            for o in out_scatter]
+            # add this line to avoid assertion error
+            generator = generator[:len(out_column)]
             gen = nn.parallel.parallel_apply(generator, out_column)
 
             # Compute loss. 
             y = [(g.contiguous().view(-1, g.size(-1)), 
                   t[:, i:i+chunk_size].contiguous().view(-1)) 
                  for g, t in zip(gen, targets)]
-            loss = nn.parallel.parallel_apply(self.criterion, y)
+            # add this line to avoid assertion error
+            criterion = self.criterion[:len(y)]
+            loss = nn.parallel.parallel_apply(criterion, y)
 
             # Sum and normalize loss
             l = nn.parallel.gather(loss, 
                                    target_device=self.devices[0])
-            l = l.sum()[0] / normalize
+            l = l.sum() / normalize
             total += l.item()
 
             # Backprop loss to output of transformer
@@ -529,7 +538,6 @@ def greedy_decode(model, src, src_mask, max_len, start_symbol):
 
 class MyIterator(data.Iterator):
     def create_batches(self):
-        print("BATCH SIZE: ", self.batch_size * 100)
         if self.train:
             def pool(d, random_shuffler):
                 for p in data.batch(d, self.batch_size * 100):
@@ -557,11 +565,11 @@ def main():
     BLANK_WORD = "<blank>"
 
     # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
-    EMB = ''
-    # EMB = 'glove.6B.200d'
+    # EMB = ''
+    EMB = 'glove.6B.200d'
     EMB_DIM = 512
-    BATCH_SIZE = 1000
-    EPOCHES = 5
+    BATCH_SIZE = 2000
+    EPOCHES = 3
 
     # GPU to use
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -601,6 +609,19 @@ def main():
     random_idx = random.randint(0, len(train) - 1)
     print(train[random_idx].src)
     print(train[random_idx].trg)
+    train_iter = MyIterator(train, batch_size=BATCH_SIZE, device=device,
+                            repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
+                            batch_size_fn=batch_size_fn, train=True)
+    valid_iter = MyIterator(val, batch_size=BATCH_SIZE, device=device,
+                            repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
+                            batch_size_fn=batch_size_fn, train=False)
+    test_iter = MyIterator(test, batch_size=BATCH_SIZE, device=device,
+                            repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
+                            batch_size_fn=batch_size_fn, train=False)
+
+    #####################
+    #   Word Embedding  #
+    #####################
 
     weight = None
     # glove embedding
@@ -616,6 +637,9 @@ def main():
 
     # TODO torchtext load customized pretrained weights
 
+    ##########################
+    #   Training the System  #
+    ##########################
     model = make_model(len(TEXT.vocab), d_model=EMB_DIM, emb_weight=weight, N=6)
     model.to(device)
 
@@ -623,22 +647,10 @@ def main():
     criterion = LabelSmoothing(size=len(TEXT.vocab), padding_idx=pad_idx, smoothing=0.1)
     criterion.to(device)
 
-    train_iter = MyIterator(train, batch_size=BATCH_SIZE, device=device,
-                            repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
-                            batch_size_fn=batch_size_fn, train=True)
-    valid_iter = MyIterator(val, batch_size=BATCH_SIZE, device=device,
-                            repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
-                            batch_size_fn=batch_size_fn, train=False)
-    test_iter = MyIterator(test, batch_size=BATCH_SIZE, device=device,
-                            repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
-                            batch_size_fn=batch_size_fn, train=False)
-
-    ##########################
-    #   Training the System  #
-    ##########################
     # if not os.path.exists(model_path):
 
     model_par = nn.DataParallel(model, device_ids=devices)
+
     model_opt = NoamOpt(model.src_embed[0].d_model, 1, 2000,
                         torch.optim.Adam(model.parameters(), lr=0, 
                         betas=(0.9, 0.98), eps=1e-9))
@@ -646,21 +658,21 @@ def main():
         model_par.train()
         run_epoch((rebatch(pad_idx, b) for b in train_iter), 
                   model_par, 
-                  SimpleLossCompute(model.generator, criterion, model_opt))
+                  MultiGPULossCompute(model.generator, criterion, devices=devices, opt=model_opt))
         torch.save(model.state_dict(), model_path)
         print("Model saved at", model_path)
 
         model_par.eval()
         loss = run_epoch((rebatch(pad_idx, b) for b in valid_iter), 
                           model_par, 
-                          SimpleLossCompute(model.generator, criterion, model_opt))
-        print(loss)
+                          MultiGPULossCompute(model.generator, criterion, devices=devices, opt=None))
+        print("Epoch %d/%d - Loss: %f" % (epoch, EPOCHES, loss))
 
     ##########################
     #       Translation      #
     ##########################
 
-    model = make_model(len(TEXT.vocab), N=6)
+    model = make_model(len(TEXT.vocab), d_model=EMB_DIM, emb_weight=weight, N=6)
     model.load_state_dict(torch.load(model_path))
     model.to(device)
 
