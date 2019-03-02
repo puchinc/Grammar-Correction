@@ -2,11 +2,22 @@
 # https://github.com/howardyclo/pytorch-seq2seq-example/blob/master/seq2seq.ipynb
 
 # need to install spacy, python -m spacy download en_core_web_lg, torch, datetime
+'''
+Train and test:
+python seq2seq.py \
+    -train_src ./data/lang8_english_src_500k.txt \
+    -train_tgt ./data/lang8_english_tgt_500k.txt \
+    -test_src ./data/lang8_english_src_test_100k.txt \ 
+    -test_tgt ./data/lang8_english_tgt_test_100k.txt \
+    -val_src ./data/lang8_english_src_val_100k.txt \
+    -val_tgt ./data/lang8_english_src_val_100k.txt
+'''
 
 import os
 import subprocess
 import codecs
 import numpy as np
+import argparse
 
 import torch
 import torch.nn as nn
@@ -40,6 +51,18 @@ PAD = 0
 BOS = 1
 EOS = 2
 UNK = 3
+
+def parse_args():
+    parser = argparse.ArgumentParser()        
+    parser.add_argument('-train_src')                   
+    parser.add_argument('-train_tgt')
+    parser.add_argument('-test_src')
+    parser.add_argument('-test_tgt')
+    parser.add_argument('-val_src')
+    parser.add_argument('-val_tgt')                 
+    args = parser.parse_args()                                      
+
+    return args
 
 class AttrDict(dict):
     """ Access dictionary keys like attribute 
@@ -1008,10 +1031,20 @@ def translate(src_text, train_dataset, encoder, decoder, max_seq_len, replace_un
     return src_text, out_text, all_attention_weights[:len(out_sent)]
 
 def main():
-    train_dataset = NMTDataset(src_path='./data/lang8_english_src_100k.txt',
-                           tgt_path='./data/lang8_english_tgt_100k.txt')
-    valid_dataset = NMTDataset(src_path='./data/source.txt',
-                           tgt_path='./data/target_valid.txt',
+    # parse arguments 
+    args = parse_args()    
+    train_src = args.train_src
+    train_tgt = args.train_tgt
+    test_src = args.test_src
+    test_tgt = args.test_tgt
+    val_src = args.val_src
+    val_tgt = args.val_tgt
+
+    # load data 
+    train_dataset = NMTDataset(src_path=train_src,
+                           tgt_path=train_tgt)
+    valid_dataset = NMTDataset(src_path=val_src,
+                           tgt_path=val_tgt,
                            src_vocab=train_dataset.src_vocab,
                            tgt_vocab=train_dataset.tgt_vocab)
     
@@ -1175,7 +1208,7 @@ def main():
         
         
     test_src_texts = []
-    with codecs.open('./data/source_test.txt', 'r', 'utf-8') as f:
+    with codecs.open(test_src, 'r', 'utf-8') as f:
         test_src_texts = f.readlines()
     print(test_src_texts[:5])
     out_texts = []
