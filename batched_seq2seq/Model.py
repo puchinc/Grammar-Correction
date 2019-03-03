@@ -393,7 +393,8 @@ class LuongAttnDecoderRNN(nn.Module):
         del src_lens
         
         return output, decoder_hidden, attention_weights
-      
+
+# glove embedding
 def load_spacy_glove_embedding(spacy_nlp, vocab):
     
     vocab_size = len(vocab.token2id)
@@ -423,6 +424,37 @@ def load_spacy_glove_embedding(spacy_nlp, vocab):
     print('='*100 + '\n')
         
     return torch.from_numpy(embedding).float()
+
+# elmo embedding 
+def load_elmo_embedding(vocab):
+    ELMO_DIM = 1024
+    options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json"
+    weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
+
+    # Compute two different representation for each token.
+    # Each representation is a linear weighted combination for the
+    # 3 layers in ELMo (i.e., charcnn, the outputs of the two BiLSTM))
+    elmo = Elmo(options_file, weight_file, 2, dropout=0)
+
+    vocab_size = len(vocab.token2id)
+    word_vec_size = ELMO_DIM
+    embedding = np.zeros((vocab_size, word_vec_size))
+    unk_count = 0
+    
+    print('='*100)
+    print('Loading elmo  embedding:')
+    print('- Vocabulary size: {}'.format(vocab_size))
+    print('- Word vector size: {}'.format(word_vec_size))
+    
+    # TODO: update embedding  
+        
+    return torch.from_numpy(embedding).float()
+
+def sen2elmo(sentence, elmo):
+    layer = 1
+    character_ids = batch_to_ids(sentence)
+    tensor = elmo(character_ids)['elmo_representations'][layer][0].data
+    return tensor
 
 def sequence_mask(sequence_length, max_len=None):
     """
@@ -867,7 +899,8 @@ def evaluate(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens, encod
     # -------------------------------------
     # Initialize decoder's hidden state as encoder's last hidden state.
     decoder_hidden = encoder_hidden
-    
+    if max_tgt_len > opts.max_seq_len:
+        max_tgt_len = opts.max_seq_len 
     # Run through decoder one time step at a time.
     for t in range(max_tgt_len):
         
