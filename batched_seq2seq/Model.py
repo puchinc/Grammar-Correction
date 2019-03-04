@@ -768,13 +768,16 @@ def training(encoder, decoder, encoder_optim, decoder_optim, train_iter, valid_i
     total_corrects = 0
     total_words = 0
     prev_gpu_memory_usage = 0
-    
+     
     for epoch in range(num_epochs):
         for batch_id, batch_data in tqdm(enumerate(train_iter)):
 
             # Unpack batch data
             src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens = batch_data
-
+            print('src sentence',src_sents)
+            print(len(src_sents))
+            print('source seq', src_seqs)
+            print(len(src_seqs))
             # Ignore batch if there is a long sequence.
             max_seq_len = max(src_lens + tgt_lens)
             if max_seq_len > opts.max_seq_len:
@@ -899,8 +902,8 @@ def evaluate(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens, encod
     # -------------------------------------
     # Initialize decoder's hidden state as encoder's last hidden state.
     decoder_hidden = encoder_hidden
-    if max_tgt_len > opts.max_seq_len:
-        max_tgt_len = opts.max_seq_len 
+    #if max_tgt_len > opts.max_seq_len:
+    #    max_tgt_len = opts.max_seq_len 
     # Run through decoder one time step at a time.
     for t in range(max_tgt_len):
         
@@ -979,7 +982,7 @@ def translate(src_text, train_dataset, encoder, decoder, max_seq_len, replace_un
     # -------------------------------------
     # Initialize decoder's hidden state as encoder's last hidden state.
     decoder_hidden = encoder_hidden
-    
+     
     # Run through decoder one time step at a time.
     for t in range(max_seq_len):
         
@@ -1003,7 +1006,10 @@ def translate(src_text, train_dataset, encoder, decoder, max_seq_len, replace_un
             if token_id == UNK and replace_unk:
                 # Replace unk by selecting the source token with the highest attention score.
                 score, idx = all_attention_weights[t].max(0)
-                token = src_sent[idx.item()]
+                if idx.item() > len(src_sent):
+                    token = src_sent[idx.item()]
+                else:
+                    break
             else:
                 # <UNK>
                 token = train_dataset.tgt_vocab.id2token[token_id.item()]

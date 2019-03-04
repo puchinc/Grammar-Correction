@@ -1,8 +1,10 @@
-from Model import *
-import argparse
 # test_src as argument
 # pickle: train_dataset, encoder, decoder, opts
-# python seq2seq_pred.py ./data/lang8_english_src_test_100k.txt
+# python seq2seq_pred.py -test_src ./data/lang8_english_src_test_100k.txt
+
+from Model import *
+import argparse
+import pickle
 
 def parse_args():
     parser = argparse.ArgumentParser()        
@@ -30,12 +32,9 @@ def main():
         _, out_text, _ = translate(src_text.strip(), train_dataset, encoder, decoder, max_seq_len=opts.max_seq_len)
         out_texts.append(out_text)
     print(out_texts[:5])
-    with codecs.open('./data/pred.txt', 'w', 'utf-8') as f:
+    with codecs.open('./data/pred_500k.txt', 'w', 'utf-8') as f:
         for text in out_texts:
             f.write(text + '\n')
-    # calculate gleu score: python ./data/gleu.py -s ./data/source_test.txt -r ./data/target_test0.txt ./data/target_test1.txt ./data/target_test2.txt ./data/target_test3.txt --hyp ./data/pred.txt
-if __name__ == '__main__':
-    main()
 
 if __name__ == '__main__':
     main()
