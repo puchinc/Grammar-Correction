@@ -172,22 +172,31 @@ python ../evaluation/gleu.py \
 
 ## Batched Seq2seq Quickstart
 
-### Step 1: Train the model
+### Step 1: Train and validate the model
 ```
 cd batched_seq2seq
 (batched_seq2seq_env)
-python seq2seq.py
+python seq2seq_train.py \
+       -train_src ./data/lang8_english_src_500k.txt \
+       -train_tgt ./data/lang8_english_tgt_500k.txt \
+       -val_src ./data/lang8_english_src_val_100k.txt \
+       -val_tgt ./data/lang8_english_src_val_100k.txt
 ```
 
-### Step 2: Evaluate the model
+### Step 2: Test the model
+```
+(batched_seq2seq_env)
+python seq2seq_pred.py \
+       -test_src ./data/lang8_english_src_test_100k.txt
+```
+
+### Step 3: Evaluate the model
 ```
 (batched_seq2seq_env)
 python ../evaluation/gleu.py \
-       -s ./data/source_test.txt 
-       -r ./data/target_test0.txt \
-          ./data/target_test1.txt \
-          ./data/target_test2.txt \
-          ./data/target_test3.txt \
+       -s ./data/lang8_english_src_test_100k.txt \
+       -r ./data/lang8_english_tgt_test_100k.txt \
        --hyp ./data/pred.txt
+
 ```
 
