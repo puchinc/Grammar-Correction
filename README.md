@@ -11,7 +11,7 @@ Three datasets
 
 #### Step 1: Preprocess the data
 ```
-python lang8_parser.py \
+python parser/lang8_parser.py \
        -i lang-8-20111007-L1-v2.dat \
        -o data/src \
        -l2 English
