@@ -29,12 +29,15 @@ def main():
     print(test_src_texts[:5])
     out_texts = []
     for src_text in test_src_texts:
-        _, out_text, _ = translate(src_text.strip(), train_dataset, encoder, decoder, max_seq_len=opts.max_seq_len)
+        _, out_text, _ = translate(src_text.strip(), train_dataset, encoder, decoder, opts, max_seq_len=opts.max_seq_len)
         out_texts.append(out_text)
     print(out_texts[:5])
-    with codecs.open('./data/pred_500k.txt', 'w', 'utf-8') as f:
+    count = 0
+    with codecs.open('./data/pred.txt', 'w', 'utf-8') as f:
         for text in out_texts:
+            count += 1
             f.write(text + '\n')
-
+    print('Done testing')
+    
 if __name__ == '__main__':
     main()

@@ -180,7 +180,8 @@ python seq2seq_train.py \
        -train_src ./data/lang8_english_src_500k.txt \
        -train_tgt ./data/lang8_english_tgt_500k.txt \
        -val_src ./data/lang8_english_src_val_100k.txt \
-       -val_tgt ./data/lang8_english_src_val_100k.txt
+       -val_tgt ./data/lang8_english_src_val_100k.txt \
+       -emb_type glove
 ```
 
 ### Step 2: Test the model

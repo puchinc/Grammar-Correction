@@ -8,7 +8,8 @@ python seq2seq.py \
     -train_src ./data/lang8_english_src_500k.txt \
     -train_tgt ./data/lang8_english_tgt_500k.txt \
     -val_src ./data/lang8_english_src_val_100k.txt \
-    -val_tgt ./data/lang8_english_src_val_100k.txt
+    -val_tgt ./data/lang8_english_src_val_100k.txt \
+    -emb_type glove
 '''
 
 from Model import *
@@ -49,7 +50,8 @@ def parse_args():
     parser.add_argument('-train_src')                   
     parser.add_argument('-train_tgt')
     parser.add_argument('-val_src')
-    parser.add_argument('-val_tgt')                 
+    parser.add_argument('-val_tgt')  
+    parser.add_argument('-emb_type')               
     args = parser.parse_args()                                      
     return args
 
@@ -64,10 +66,9 @@ def main():
     args = parse_args()    
     train_src = args.train_src
     train_tgt = args.train_tgt
-    test_src = args.test_src
-    test_tgt = args.test_tgt
     val_src = args.val_src
     val_tgt = args.val_tgt
+    emb_type = args.emb_type
 
     # load data 
     train_dataset = NMTDataset(src_path=train_src,
@@ -119,7 +120,7 @@ def main():
         opts.bidirectional = True
         opts.attention = True
         opts.share_embeddings = True
-        opts.pretrained_embeddings = True
+        opts.pretrained_embeddings = emb_type
         opts.fixed_embeddings = True
         opts.tie_embeddings = True # Tie decoder's input and output embeddings
 
@@ -148,7 +149,13 @@ def main():
     # Initialize embeddings.
     # We can actually put all modules in one module like `NMTModel`)
     # See: https://github.com/spro/practical-pytorch/issues/34
-    word_vec_size = opts.word_vec_size if not opts.pretrained_embeddings else nlp.vocab.vectors_length
+    if opts.pretrained_embeddings=='glove':
+        word_vec_size = nlp.vocab.vectors_length
+    elif opts.pretrained_embeddings=='elmo':
+        word_vec_size = 1024
+    else:
+        word_vec_size = opts.word_vec_size 
+    
     src_embedding = nn.Embedding(src_vocab_size, word_vec_size, padding_idx=PAD)
     tgt_embedding = nn.Embedding(tgt_vocab_size, word_vec_size, padding_idx=PAD)
 
@@ -169,14 +176,14 @@ def main():
                                       tie_embeddings=opts.tie_embeddings,
                                       dropout=opts.dropout)
 
-    if opts.pretrained_embeddings:
+    if opts.pretrained_embeddings=='glove':
         glove_embeddings = load_spacy_glove_embedding(nlp, train_dataset.src_vocab)
         encoder.embedding.weight.data.copy_(glove_embeddings)
         decoder.embedding.weight.data.copy_(glove_embeddings)
         if opts.fixed_embeddings:
             encoder.embedding.weight.requires_grad = False
             decoder.embedding.weight.requires_grad = False
-
+    
     if LOAD_CHECKPOINT:
         encoder.load_state_dict(checkpoint['encoder_state_dict'])
         decoder.load_state_dict(checkpoint['decoder_state_dict'])
@@ -205,7 +212,7 @@ def main():
         
     # 1) training
     training(encoder, decoder, encoder_optim, decoder_optim, train_iter, valid_iter, opts, load_checkpoint, checkpoint)
-    
+     
     print('Done training. Start Validation.')
     
     # 2) validation 
