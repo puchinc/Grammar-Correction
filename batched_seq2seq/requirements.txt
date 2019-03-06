@@ -2,3 +2,4 @@ torch
 spacy
 datetime
 scipy
+allennlp

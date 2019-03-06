@@ -3,7 +3,6 @@ import subprocess
 import codecs
 import numpy as np
 import argparse
-
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
@@ -11,6 +10,8 @@ from torch import optim
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 import spacy
+import sys
+from allennlp.modules.elmo import Elmo, batch_to_ids
 
 nlp = spacy.load('en_core_web_lg') # For the glove embeddings
 
@@ -187,7 +188,7 @@ class EncoderRNN(nn.Module):
                            dropout=self.dropout, 
                            bidirectional=self.bidirectional)
         
-    def forward(self, src_seqs, src_lens, hidden=None):
+    def forward(self, src_seqs, src_lens, elmo_emb=None, hidden=None):
         """
         Args:
             - src_seqs: (max_src_len, batch_size)
@@ -198,7 +199,10 @@ class EncoderRNN(nn.Module):
         """
         
         # (max_src_len, batch_size) => (max_src_len, batch_size, word_vec_size)
-        emb = self.embedding(src_seqs)
+        if elmo_emb is None:
+            emb = self.embedding(src_seqs)
+        else:
+            emb = elmo_emb
 
         # packed_emb:
         # - data: (sum(batch_sizes), word_vec_size)
@@ -393,7 +397,8 @@ class LuongAttnDecoderRNN(nn.Module):
         del src_lens
         
         return output, decoder_hidden, attention_weights
-      
+
+# glove embedding
 def load_spacy_glove_embedding(spacy_nlp, vocab):
     
     vocab_size = len(vocab.token2id)
@@ -423,6 +428,20 @@ def load_spacy_glove_embedding(spacy_nlp, vocab):
     print('='*100 + '\n')
         
     return torch.from_numpy(embedding).float()
+
+# elmo embedding 
+def load_elmo_embeddings(sentences, max_seq):
+    options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json"
+    weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
+    elmo = Elmo(options_file, weight_file, 2, dropout=0)
+    character_ids = batch_to_ids(sentences)
+    elmo_embeddings = elmo(character_ids)['elmo_representations'][0]
+    
+    embeddings = elmo_embeddings.transpose(0,1)
+    # dimension: (max_src_len, batch_size, word_vec_size)
+    emb_zeros = torch.zeros(max_seq-embeddings.size()[0], embeddings.size()[1], embeddings.size()[2])
+    embeddings = torch.cat((embeddings, emb_zeros), 0)
+    return embeddings
 
 def sequence_mask(sequence_length, max_len=None):
     """
@@ -624,6 +643,12 @@ def train(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens,
     # `opts.max_seq_len` is a fixed number, unlike `max_tgt_len` always varys.
     decoder_outputs = Variable(torch.zeros(opts.max_seq_len, batch_size, decoder.vocab_size))
 
+    # pretrained embedding
+    if opts.pretrained_embeddings == 'elmo':
+        elmo_emb = load_elmo_embeddings(src_sents, src_seqs.size()[0])
+    else:
+        elmo_emb = None
+
     # Move variables from CPU to GPU.
     if USE_CUDA:
         src_seqs = src_seqs.cuda()
@@ -632,6 +657,8 @@ def train(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens,
         tgt_lens = tgt_lens.cuda()
         input_seq = input_seq.cuda()
         decoder_outputs = decoder_outputs.cuda()
+        if elmo_emb is not None:
+            elmo_emb = elmo_emb.cuda()
         
     # -------------------------------------
     # Training mode (enable dropout)
@@ -648,7 +675,8 @@ def train(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens,
     # -------------------------------------
     # Forward encoder
     # -------------------------------------
-    encoder_outputs, encoder_hidden = encoder(src_seqs, src_lens.data.tolist())
+    
+    encoder_outputs, encoder_hidden = encoder(src_seqs, src_lens.data.tolist(), elmo_emb)
 
     # -------------------------------------
     # Forward decoder
@@ -736,13 +764,12 @@ def training(encoder, decoder, encoder_optim, decoder_optim, train_iter, valid_i
     total_corrects = 0
     total_words = 0
     prev_gpu_memory_usage = 0
-    
+     
     for epoch in range(num_epochs):
         for batch_id, batch_data in tqdm(enumerate(train_iter)):
 
             # Unpack batch data
             src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens = batch_data
-
             # Ignore batch if there is a long sequence.
             max_seq_len = max(src_lens + tgt_lens)
             if max_seq_len > opts.max_seq_len:
@@ -842,6 +869,10 @@ def evaluate(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens, encod
     # `opts.max_seq_len` is a fixed number, unlike `max_tgt_len` always varys.
     decoder_outputs = Variable(torch.zeros(opts.max_seq_len, batch_size, decoder.vocab_size), volatile=True)
 
+    if opts.pretrained_embeddings == 'elmo':
+        elmo_emb = load_elmo_embeddings(src_sents, src_seqs.size()[0])
+    else:
+        elmo_emb = None
     # Move variables from CPU to GPU.
     if USE_CUDA:
         src_seqs = src_seqs.cuda()
@@ -850,7 +881,8 @@ def evaluate(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens, encod
         tgt_lens = tgt_lens.cuda()
         input_seq = input_seq.cuda()
         decoder_outputs = decoder_outputs.cuda()
-        
+        if elmo_emb is not None:
+            elmo_emb = elmo_emb.cuda()
     # -------------------------------------
     # Evaluation mode (disable dropout)
     # -------------------------------------
@@ -860,14 +892,15 @@ def evaluate(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens, encod
     # -------------------------------------
     # Forward encoder
     # -------------------------------------
-    encoder_outputs, encoder_hidden = encoder(src_seqs, src_lens.data.tolist())
+    encoder_outputs, encoder_hidden = encoder(src_seqs, src_lens.data.tolist(), elmo_emb)
     
     # -------------------------------------
     # Forward decoder
     # -------------------------------------
     # Initialize decoder's hidden state as encoder's last hidden state.
     decoder_hidden = encoder_hidden
-    
+    #if max_tgt_len > opts.max_seq_len:
+    #    max_tgt_len = opts.max_seq_len 
     # Run through decoder one time step at a time.
     for t in range(max_tgt_len):
         
@@ -900,7 +933,7 @@ def evaluate(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens, encod
     
     return loss.item(), pred_seqs, attention_weights, num_corrects, num_words
 
-def translate(src_text, train_dataset, encoder, decoder, max_seq_len, replace_unk=True):
+def translate(src_text, train_dataset, encoder, decoder, opts, max_seq_len, replace_unk=True):
     # -------------------------------------
     # Prepare input and output placeholders
     # -------------------------------------
@@ -923,12 +956,19 @@ def translate(src_text, train_dataset, encoder, decoder, max_seq_len, replace_un
     # Store output words and attention states
     out_sent = []
     all_attention_weights = torch.zeros(max_seq_len, len(src_seqs))
-    
+   
+    # pretrained embedding
+    if opts.pretrained_embeddings == 'elmo':
+        elmo_emb = load_elmo_embeddings([src_sent], src_seqs.size()[0])
+    else:
+        elmo_emb = None 
     # Move variables from CPU to GPU.
     if USE_CUDA:
         src_seqs = src_seqs.cuda()
         src_lens = src_lens.cuda()
         input_seq = input_seq.cuda()
+        if elmo_emb is not None:
+            elmo_emb = elmo_emb.cuda()
         
     # -------------------------------------
     # Evaluation mode (disable dropout)
@@ -939,14 +979,14 @@ def translate(src_text, train_dataset, encoder, decoder, max_seq_len, replace_un
     # -------------------------------------
     # Forward encoder
     # -------------------------------------
-    encoder_outputs, encoder_hidden = encoder(src_seqs, src_lens.data.tolist())
+    encoder_outputs, encoder_hidden = encoder(src_seqs, src_lens.data.tolist(), elmo_emb)
 
     # -------------------------------------
     # Forward decoder
     # -------------------------------------
     # Initialize decoder's hidden state as encoder's last hidden state.
     decoder_hidden = encoder_hidden
-    
+     
     # Run through decoder one time step at a time.
     for t in range(max_seq_len):
         
@@ -970,7 +1010,10 @@ def translate(src_text, train_dataset, encoder, decoder, max_seq_len, replace_un
             if token_id == UNK and replace_unk:
                 # Replace unk by selecting the source token with the highest attention score.
                 score, idx = all_attention_weights[t].max(0)
-                token = src_sent[idx.item()]
+                if idx.item() > len(src_sent):
+                    token = src_sent[idx.item()]
+                else:
+                    break
             else:
                 # <UNK>
                 token = train_dataset.tgt_vocab.id2token[token_id.item()]

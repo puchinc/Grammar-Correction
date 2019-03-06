@@ -4,13 +4,14 @@ The goal of this project is to experiment with elmo and bert embedding along wit
 
 ## Requirements
 
-Two datasets
+Three datasets
 1. CoNLL-2013 and CoNLL-2014 Shared Task for grammar correction. They have original sentence and corrected sentence with position of error in the sentence and error type. CoNLL-2013 has 5 types of errors while CoNLL-2014 has 28 types of errors. 
 2. Lang8
+3. AESW Dataset 
 
 #### Step 1: Preprocess the data
 ```
-python lang8_parser.py \
+python parser/lang8_parser.py \
        -i lang-8-20111007-L1-v2.dat \
        -o data/src \
        -l2 English
@@ -169,22 +170,32 @@ python ../evaluation/gleu.py \
 
 ## Batched Seq2seq Quickstart
 
-### Step 1: Train the model
+### Step 1: Train and validate the model
 ```
 cd batched_seq2seq
 (batched_seq2seq_env)
-python seq2seq.py
+python seq2seq_train.py \
+       -train_src ./data/lang8_english_src_500k.txt \
+       -train_tgt ./data/lang8_english_tgt_500k.txt \
+       -val_src ./data/lang8_english_src_val_100k.txt \
+       -val_tgt ./data/lang8_english_src_val_100k.txt \
+       -emb_type glove
 ```
 
-### Step 2: Evaluate the model
+### Step 2: Test the model
+```
+(batched_seq2seq_env)
+python seq2seq_pred.py \
+       -test_src ./data/lang8_english_src_test_100k.txt
+```
+
+### Step 3: Evaluate the model
 ```
 (batched_seq2seq_env)
 python ../evaluation/gleu.py \
-       -s ./data/source_test.txt 
-       -r ./data/target_test0.txt \
-          ./data/target_test1.txt \
-          ./data/target_test2.txt \
-          ./data/target_test3.txt \
+       -s ./data/lang8_english_src_test_100k.txt \
+       -r ./data/lang8_english_tgt_test_100k.txt \
        --hyp ./data/pred.txt
+
 ```
 
