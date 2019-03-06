@@ -7,7 +7,7 @@
 # python -m spacy download en 
 
 # Train:
-# python annotated_transformer.py
+# python trainsformer_train.py
 
 # Evaluate:
 # python ../evaluation/gleu.py -s source.txt -r target.txt --hyp pred.txt
@@ -27,7 +27,7 @@ import sys
 import random
 
 from Model import MyIterator, LabelSmoothing, NoamOpt, MultiGPULossCompute, SimpleLossCompute, Batch, Elmo_Batch
-from Model import build_model, make_model, run_epoch, rebatch, batch_size_fn, elmo_rebatch
+from Model import build_model, run_epoch, rebatch, batch_size_fn, elmo_rebatch, build_pretrained
 
 def main():
     BOS_WORD = '<s>'
@@ -39,7 +39,7 @@ def main():
     EMB = 'elmo'
     # EMB = 'glove.6B.200d'
     EMB_DIM = 512
-    BATCH_SIZE = 1000
+    BATCH_SIZE = 500
     EPOCHES = 3
 
     # GPU to use
@@ -90,71 +90,21 @@ def main():
     #####################
     #   Word Embedding  #
     #####################
-
-    # weights = None
-    emb = None
-    data_generator = lambda data: data
-
-    # glove embedding
     if 'glove' in EMB:
         TEXT.build_vocab(train.src, vectors=EMB)
-        pad_idx = TEXT.vocab.stoi["<blank>"]
-
-        EMB_DIM = 200
-        data_generator = lambda data: (rebatch(pad_idx, b) for b in data)
-        emb = nn.Embedding.from_pretrained(TEXT.vocab.vectors)
-
-    # TODO elmo embedding
-    elif 'elmo' in EMB: 
-        from allennlp.modules.elmo import Elmo
-        elmo = Elmo(elmo_options_file, elmo_weights_file, 1, dropout=0).to(device)
-
-        MIN_FREQ = 2
-        TEXT.build_vocab(train.src, min_freq=MIN_FREQ)
-        pad_idx = TEXT.vocab.stoi["<blank>"]
-
-        EMB_DIM = 1024
-        data_generator = lambda data: (elmo_rebatch(pad_idx, b, TEXT.vocab, device) for b in data)
-        emb = lambda ids: elmo(ids)['elmo_representations'][0]
-
-    # TODO bert embedding
-    elif 'bert' in EMB: pass
     else:
         MIN_FREQ = 2
         TEXT.build_vocab(train.src, min_freq=MIN_FREQ)
-        pad_idx = TEXT.vocab.stoi["<blank>"]
+    pad_idx = TEXT.vocab.stoi["<blank>"]
+    print("Save Vocabuary...")
+    torch.save(TEXT.vocab, vocab_file)
 
-        data_generator = lambda data: (rebatch(pad_idx, b) for b in data)
-        emb = nn.Embedding(len(TEXT.vocab), EMB_DIM)
+    data_generator, emb, EMB_DIM = build_pretrained(EMB, TEXT.vocab, device, 
+            elmo_options=elmo_options_file, elmo_weights=elmo_weights_file)
 
-    # train_iter = batch * sen * word
-    # for b in train:
-        # print(b)
-        # sys.exit()
-
-    # for b in train_iter:
-        # for sen in b.src:
-            # for word_id in sen:
-                # print(TEXT.vocab.itos[word_id.item()], end=' ')
-            # print()
-        # sys.exit()
-
-    # for b in data.Iterator(train, batch_size=2, device=device):
-        # for sen in b.src:
-            # for word_id in sen:
-                # print(TEXT.vocab.itos[word_id.item()], end=' ')
-            # print()
-        # sys.exit()
-
-    # print("Save Vocabuary...")
-    # torch.save(TEXT.vocab, vocab_file)
-
-
-    # TODO torchtext load customized pretrained weights
     ##########################
     #   Training the System  #
     ##########################
-    # model = make_model(len(TEXT.vocab), d_model=EMB_DIM, emb_weight=weights, N=6)
     model = build_model(len(TEXT.vocab), emb, d_model=EMB_DIM).to(device)
     criterion = LabelSmoothing(size=len(TEXT.vocab), padding_idx=pad_idx, smoothing=0.1).to(device)
 
@@ -169,7 +119,7 @@ def main():
         
         # run_epoch(data_generator(train_iter), model_par, 
                   # MultiGPULossCompute(model.generator, criterion, devices, opt=model_opt))
-        # print("Model saved...")
+        # print("Save Model...")
         # torch.save(model.state_dict(), model_file)
 
         # model_par.eval()
@@ -183,8 +133,8 @@ def main():
         run_epoch(data_generator(train_iter), 
                   model, 
                   SimpleLossCompute(model.generator, criterion, opt=model_opt))
-        print("Model saved...")
-        torch.save([model.state_dict(), TEXT.vocab], model_file)
+        print("Save Model...")
+        torch.save(model.state_dict(), model_file)
 
         model.eval()
         loss = run_epoch(data_generator(valid_iter), 

@@ -45,29 +45,19 @@ cd -
 ```
 wget -P data/embs/ https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json
 wget -P data/embs/ https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5
-
-wget -P data/embs/ http://nlp.stanford.edu/data/glove.6B.zip
-unzip data/embs/glove.6B.zip
 ```
 
-### Step 4: Virtualenv
+#### Step 4: Virtualenv
 
 You need three virtualenvs named allennlp, torch, and transformer\_env. allennlp is for the ELMo embedding, torch is for machine translation, and transformer\_env is for the Transformer model. GPU is required for generating new elmo embeddings and Python3 is used.
 
-[ELMo] https://github.com/allenai/allennlp/blob/master/tutorials/how_to/elmo.md 
 [Transformer] http://www.realworldnlpbook.com/blog/building-seq2seq-machine-translation-models-using-allennlp.html
+[ELMo] https://github.com/allenai/allennlp/blob/master/tutorials/how_to/elmo.md 
 * allennlp
 
         pip install allennlp
-
-[Seq2seq] https://pytorch.org/tutorials/intermediate/seq2seq_translation_tutorial.html
-* torch
-
-        pip install torch
-        pip install torchvision
-        pip install matplotlib
-        pip install nltk
-        pip install scipy
+        pip install torch numpy matplotlib spacy torchtext seaborn 
+        python -m spacy download en 
 
 [Batched seq2seq] https://github.com/howardyclo/pytorch-seq2seq-example/blob/master/seq2seq.ipynb
 * batched\_seq2seq\_env
@@ -80,51 +70,12 @@ You need three virtualenvs named allennlp, torch, and transformer\_env. allennlp
         
         pip install pytorch-pretrained-bert
         
-## BERT Embedding
-
-### Train word embeddings
-```
-(bert_venv)
-python emb/bert.py --input_file data/test/lang8_small.txt \
-        --output_file data/embeddings/lang8_small.bert \
-        --bert_mode bert-base-uncased \
-        --do_lower_case \
-        --batch_size 16
-```
-## ELMo Quickstart
-
-### Step 1: Pretrained word embeddings
-```
-(allennlp_venv)
-python emb/elmo.py data/test/lang8_small.txt data/embeddings/lang8_small.elmo 
-```
-
-### Step 2: Train the model
-```
-(torch_venv)
-python train.py \
-       -i data/test/lang8_small.txt \
-       -e data/embeddings/lang8_small.elmo \
-       -enc data/test/with_error_tag.encoder \
-       -dec data/test/with_error_tag.decoder
-```
-
-### Step 3: Evaluate the model
-```
-(torch_venv)
-python translate.py
-python evaluation/gleu.py \
-       -s ./source.txt \
-       -r ./target.txt \
-       --hyp ./pred.txt
-```
-
 ## Transformer Quickstart
 
 ### Step 1: Train the model
 ```
 (transformer_env)
-CUDA_VISIBLE_DEVICES=0,1,2,3 python transformer/annotated_transformer.py
+CUDA_VISIBLE_DEVICES=0,1,2,3 python transformer/trainsformer_train.py
 ```
 
 ### Step 2: Evaluate the model
@@ -134,38 +85,6 @@ python evaluation/gleu.py \
        -s data/eval/lang8.eval.src \
        -r data/eval/lang8.eval.trg \
        --hyp data/eval/lang8.eval.pred
-``` 
-
----
-
-### Allennlp Transformer
-
-### Step 1: Preprocess the data
-```
-cd transformer
-python prepare_csv.py \
-       -i ../data/test/lang8_small.txt \
-       -train ../data/test/lang8_small_train.csv \
-       -train_r 0.6 \
-       -test ../data/test/lang8_small_test.csv \
-       -test_r 0.2 \
-       -val ../data/test/lang8_small_val.csv \
-       -val_r 0.2
-```
-
-### Step 2: Train the model
-```
-(transformer_env)
-python transformer_allennlp.py
-```
-
-### Step 3: Evaluate the model
-```
-(transformer_env)
-python ../evaluation/gleu.py \
-       -s ./source.txt \
-       -r ./target.txt \
-       --hyp ./pred.txt
 ``` 
 
 ## Batched Seq2seq Quickstart
@@ -197,5 +116,16 @@ python ../evaluation/gleu.py \
        -r ./data/lang8_english_tgt_test_100k.txt \
        --hyp ./data/pred.txt
 
+```
+## BERT Embedding
+
+### Train word embeddings
+```
+(bert_venv)
+python emb/bert.py --input_file data/test/lang8_small.txt \
+        --output_file data/embeddings/lang8_small.bert \
+        --bert_mode bert-base-uncased \
+        --do_lower_case \
+        --batch_size 16
 ```
 

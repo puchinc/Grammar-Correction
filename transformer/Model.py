@@ -333,26 +333,6 @@ def make_model(vocab_size, N=6, d_model=512, d_ff=2048, h=8,
 ######################
 
 """ Batches and Masking """
-class Elmo_Batch:
-    "Object for holding a batch of data with mask during training."
-    def __init__(self, src, src_y, trg=None, trg_y=None, pad=0):
-        self.src = src
-        self.src_mask = (src_y != pad).unsqueeze(-2)
-        if trg is not None:
-            self.trg = trg
-            self.trg_y = trg_y
-            self.trg_mask = self.make_std_mask(trg_y, pad)
-            self.ntokens = (self.trg_y != pad).data.sum().item()
-    
-    @staticmethod
-    def make_std_mask(tgt, pad):
-        "Create a mask to hide padding and future words."
-        tgt_mask = (tgt != pad).unsqueeze(-2)
-        tgt_mask = tgt_mask & Variable(
-            subsequent_mask(tgt.size(-1)).type_as(tgt_mask.data))
-        return tgt_mask
-
-
 class Batch:
     "Object for holding a batch of data with mask during training."
     # Maybe it is the norm that should be blamed, I solved this by fixing the Batch class,
@@ -369,6 +349,25 @@ class Batch:
             self.trg_mask = self.make_std_mask(self.trg, pad)
             self.ntokens = (self.trg_y != pad).data.sum().item()
             # print("Batch Masking: ", src.shape, self.src_mask.shape, self.trg.shape, self.trg_mask.shape, self.trg_y.shape)
+    
+    @staticmethod
+    def make_std_mask(tgt, pad):
+        "Create a mask to hide padding and future words."
+        tgt_mask = (tgt != pad).unsqueeze(-2)
+        tgt_mask = tgt_mask & Variable(
+            subsequent_mask(tgt.size(-1)).type_as(tgt_mask.data))
+        return tgt_mask
+
+class Elmo_Batch:
+    "Object for holding a batch of data with mask during training."
+    def __init__(self, src, src_y, trg=None, trg_y=None, pad=0):
+        self.src = src
+        self.src_mask = (src_y != pad).unsqueeze(-2)
+        if trg is not None:
+            self.trg = trg
+            self.trg_y = trg_y
+            self.trg_mask = self.make_std_mask(trg_y, pad)
+            self.ntokens = (self.trg_y != pad).data.sum().item()
     
     @staticmethod
     def make_std_mask(tgt, pad):
@@ -505,22 +504,17 @@ class MultiGPULossCompute:
     "A multi-gpu loss compute and train function."
     def __init__(self, generator, criterion, devices, opt=None, chunk_size=5):
         # Send out to different gpus.
-        self.generator = generator
-        self.criterion = nn.parallel.replicate(criterion, 
-                                               devices=devices)
+        self.generator = nn.parallel.replicate(generator, devices=devices)
+        self.criterion = nn.parallel.replicate(criterion, devices=devices)
         self.opt = opt
         self.devices = devices
         self.chunk_size = chunk_size
 
     def __call__(self, out, targets, normalize):
         total = 0.0
-        generator  = nn.parallel.replicate(self.generator, 
-                devices=self.devices)
-        out_scatter = nn.parallel.scatter(out, 
-                                          target_gpus=self.devices)
+        out_scatter = nn.parallel.scatter(out, target_gpus=self.devices)
         out_grad = [[] for _ in out_scatter]
-        targets = nn.parallel.scatter(targets, 
-                                      target_gpus=self.devices)
+        targets = nn.parallel.scatter(targets, target_gpus=self.devices)
 
         # Divide generating into chunks.
         chunk_size = self.chunk_size
@@ -530,7 +524,7 @@ class MultiGPULossCompute:
                                     requires_grad=self.opt is not None)] 
                            for o in out_scatter]
             # add this line to avoid assertion error
-            generator = generator[:len(out_column)]
+            generator = self.generator[:len(out_column)]
             gen = nn.parallel.parallel_apply(generator, out_column)
 
             # Compute loss. 
@@ -620,3 +614,33 @@ def elmo_rebatch(pad_idx, batch, vocab, device):
     # print("ELMo shape src, trg: ", src.shape, trg.shape)
 
     return Elmo_Batch(src, src_y, trg, trg_y, pad_idx)
+
+#####################
+#   Word Embedding  #
+#####################
+
+options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json"
+weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
+def build_pretrained(emb_name, vocab, device, elmo_options=options_file, elmo_weights=weight_file):
+    data_generator, emb, emb_dim = None, None, 512
+    pad_idx = vocab.stoi["<blank>"]
+    if 'glove' in emb_name:
+        emb_dim = 200
+        data_generator = lambda data: (rebatch(pad_idx, b) for b in data)
+        emb = nn.Embedding.from_pretrained(field.vocab.vectors)
+
+    elif 'elmo' in emb_name: 
+        from allennlp.modules.elmo import Elmo
+        elmo = Elmo(elmo_options, elmo_weights, 1, dropout=0).to(device)
+
+        emb_dim = 1024
+        data_generator = lambda data: (elmo_rebatch(pad_idx, b, vocab, device) for b in data)
+        emb = lambda ids: elmo(ids)['elmo_representations'][0]
+
+    # TODO bert embedding
+    elif 'bert' in emb_name: pass
+    else:
+        data_generator = lambda data: (rebatch(pad_idx, b) for b in data)
+        emb = nn.Embedding(len(vocab), emb_dim)
+
+    return data_generator, emb, emb_dim

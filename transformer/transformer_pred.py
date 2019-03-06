@@ -7,7 +7,7 @@
 # python -m spacy download en 
 
 # Train:
-# python annotated_transformer.py
+# python transformer_pred.py
 
 # Evaluate:
 # python ../evaluation/gleu.py -s source.txt -r target.txt --hyp pred.txt
@@ -26,7 +26,7 @@ import os
 import sys
 import random
 
-from Model import MyIterator, make_model, batch_size_fn, greedy_decode
+from Model import MyIterator, build_model, batch_size_fn, greedy_decode, build_pretrained
 
 def main():
     BOS_WORD = '<s>'
@@ -34,7 +34,8 @@ def main():
     BLANK_WORD = "<blank>"
 
     # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
-    EMB = 'bow'
+    # EMB = 'bow'
+    EMB = 'elmo'
     # EMB = 'glove.6B.200d'
     EMB_DIM = 512
     BATCH_SIZE = 2500
@@ -48,6 +49,8 @@ def main():
     test_dir = os.path.join(root_dir, 'data/test')
     eval_dir = os.path.join(root_dir, 'data/eval')
     model_path = os.path.join(root_dir, 'data/models', EMB + '.transformer.pt')
+    elmo_options_file = os.path.join(root_dir, 'data/embs/elmo.json')
+    elmo_weights_file = os.path.join(root_dir, 'data/embs/elmo.hdf5')
     vocab_path = os.path.join(root_dir, 'data/models', 'english.vocab')
 
     if not os.path.exists(eval_dir):
@@ -77,22 +80,14 @@ def main():
     #####################
     #   Word Embedding  #
     #####################
-
-    weights = None
-    # glove embedding
-    if 'glove' in EMB:
-        weights = TEXT.vocab.vectors
-        EMB_DIM = TEXT.vocab.vectors.shape[1]
-    # TODO elmo embedding
-    elif 'emlo' in EMB: pass
-    # TODO bert embedding
+    data_generator, emb, EMB_DIM = build_pretrained(EMB, TEXT.vocab, device, 
+            elmo_options=elmo_options_file, elmo_weights=elmo_weights_file)
 
     ##########################
     #      Translation       #
     ##########################
-    model = make_model(len(TEXT.vocab), d_model=EMB_DIM, emb_weight=weights, N=6)
-    model_weights = torch.load(model_path)
-    model.load_state_dict(model_weights)
+    model = build_model(len(TEXT.vocab), emb, d_model=EMB_DIM).to(device)
+    model.load_state_dict(torch.load(model_path))
     model.to(device)
 
     f_src = open(os.path.join(eval_dir, 'lang8.eval.src'), 'w+')
