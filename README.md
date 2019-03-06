@@ -120,8 +120,6 @@ python evaluation/gleu.py \
 
 ## Transformer Quickstart
 
-### Annotated Transformer
-
 ### Step 1: Train the model
 ```
 (transformer_env)
@@ -132,9 +130,9 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 python transformer/annotated_transformer.py
 ```
 (transformer_env)
 python evaluation/gleu.py \
-       -s data/src/lang8.eval.src \
-       -r data/src/lang8.eval.trg \
-       --hyp data/src/lang8.eval.pred
+       -s data/eval/lang8.eval.src \
+       -r data/eval/lang8.eval.trg \
+       --hyp data/eval/lang8.eval.pred
 ``` 
 
 ---

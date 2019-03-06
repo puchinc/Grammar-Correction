@@ -8,6 +8,8 @@ from torch.autograd import Variable
 from torchtext import data, datasets
 import spacy
 
+from allennlp.modules.elmo import Elmo, batch_to_ids
+
 import os
 import sys
 import random
@@ -38,6 +40,7 @@ class EncoderDecoder(nn.Module):
         return self.encoder(self.src_embed(src), src_mask)
     
     def decode(self, memory, src_mask, tgt, tgt_mask):
+        # print("Start to decode...")
         return self.decoder(self.tgt_embed(tgt), memory, src_mask, tgt_mask)
 
 class Generator(nn.Module):
@@ -68,8 +71,13 @@ class Encoder(nn.Module):
         
     def forward(self, x, mask):
         "Pass the input (and mask) through each layer in turn."
+
+        # TODO Bug here
         for layer in self.layers:
             x = layer(x, mask)
+            # print("Stacking Layers...")
+        # Bug up
+
         return self.norm(x)
 
 class LayerNorm(nn.Module):
@@ -97,6 +105,7 @@ class SublayerConnection(nn.Module):
 
     def forward(self, x, sublayer):
         "Apply residual connection to any sublayer with the same size."
+        # print("SublayerConnection... ", x.shape)
         return x + self.dropout(sublayer(self.norm(x)))
 
 class EncoderLayer(nn.Module):
@@ -110,7 +119,9 @@ class EncoderLayer(nn.Module):
 
     def forward(self, x, mask):
         "Follow Figure 1 (left) for connections."
+        # print("Before EncoderLayer...", x.shape)
         x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, mask))
+        # print("After EncoderLayer...", x.shape)
         return self.sublayer[1](x, self.feed_forward)
 
 """ Decoder """
@@ -217,6 +228,16 @@ class PositionwiseFeedForward(nn.Module):
 #   Embeddings and Softmax  #
 #############################
 
+class Embedding(nn.Module):
+    def __init__(self, embedding, d_model):
+        super(Embedding, self).__init__()
+        self.lut = embedding
+        self.d_model = d_model
+
+    def forward(self, x):
+        # print("Embedding: ", self.lut(x).shape)
+        return self.lut(x) * math.sqrt(self.d_model)
+
 class Embeddings(nn.Module):
     def __init__(self, d_model, vocab, weight=None):
         super(Embeddings, self).__init__()
@@ -260,6 +281,28 @@ class PositionalEncoding(nn.Module):
 #      Full Model      #
 ########################
 
+def build_model(vocab_size, emb, d_model=512, N=6, d_ff=2048, h=8, dropout=0.1):
+    "Helper: Construct a model from hyperparameters."
+    src_vocab = trg_vocab = vocab_size
+    c = copy.deepcopy
+    attn = MultiHeadedAttention(h, d_model)
+    ff = PositionwiseFeedForward(d_model, d_ff, dropout)
+    position = PositionalEncoding(d_model, dropout)
+    model = EncoderDecoder(
+        Encoder(EncoderLayer(d_model, c(attn), c(ff), dropout), N),
+        Decoder(DecoderLayer(d_model, c(attn), c(attn), 
+                             c(ff), dropout), N),
+        nn.Sequential(Embedding(emb, d_model), c(position)),
+        nn.Sequential(Embedding(emb, d_model), c(position)),
+        Generator(d_model, trg_vocab))
+    
+    # This was important from their code. 
+    # Initialize parameters with Glorot / fan_avg.
+    for p in model.parameters():
+        if p.dim() > 1:
+            nn.init.xavier_uniform_(p)
+    return model
+
 def make_model(vocab_size, N=6, d_model=512, d_ff=2048, h=8, 
         dropout=0.1, emb_weight=None):
     "Helper: Construct a model from hyperparameters."
@@ -290,6 +333,25 @@ def make_model(vocab_size, N=6, d_model=512, d_ff=2048, h=8,
 ######################
 
 """ Batches and Masking """
+class Elmo_Batch:
+    "Object for holding a batch of data with mask during training."
+    def __init__(self, src, src_y, trg=None, trg_y=None, pad=0):
+        self.src = src
+        self.src_mask = (src_y != pad).unsqueeze(-2)
+        if trg is not None:
+            self.trg = trg
+            self.trg_y = trg_y
+            self.trg_mask = self.make_std_mask(trg_y, pad)
+            self.ntokens = (self.trg_y != pad).data.sum().item()
+    
+    @staticmethod
+    def make_std_mask(tgt, pad):
+        "Create a mask to hide padding and future words."
+        tgt_mask = (tgt != pad).unsqueeze(-2)
+        tgt_mask = tgt_mask & Variable(
+            subsequent_mask(tgt.size(-1)).type_as(tgt_mask.data))
+        return tgt_mask
+
 
 class Batch:
     "Object for holding a batch of data with mask during training."
@@ -301,10 +363,12 @@ class Batch:
         self.src = src
         self.src_mask = (src != pad).unsqueeze(-2)
         if trg is not None:
+            # print("TRG: ", trg)
             self.trg = trg[:, :-1]
             self.trg_y = trg[:, 1:]
             self.trg_mask = self.make_std_mask(self.trg, pad)
             self.ntokens = (self.trg_y != pad).data.sum().item()
+            # print("Batch Masking: ", src.shape, self.src_mask.shape, self.trg.shape, self.trg_mask.shape, self.trg_y.shape)
     
     @staticmethod
     def make_std_mask(tgt, pad):
@@ -325,8 +389,10 @@ def run_epoch(data_iter, model, loss_compute):
     # change batch.ntokens to batch.ntokens.float().item() 
     # due to pytorch new version. do the same thing for norm
     for i, batch in enumerate(data_iter):
-        out = model.forward(batch.src, batch.trg,
-                            batch.src_mask, batch.trg_mask)
+        # out = model.forward(batch.src, batch.trg,
+                            # batch.src_mask, batch.trg_mask)
+        # print("Run Epoche SRC v.s. TRG: ", batch.src.shape, batch.src_mask.shape, batch.trg.shape, batch.trg_mask.shape, batch.trg_y.shape)
+        out = model(batch.src, batch.trg, batch.src_mask, batch.trg_mask)
         loss = loss_compute(out, batch.trg_y, batch.ntokens)
         total_loss += loss
         total_tokens += batch.ntokens
@@ -539,3 +605,18 @@ def rebatch(pad_idx, batch):
     "Fix order in torchtext to match ours"
     src, trg = batch.src.transpose(0, 1), batch.trg.transpose(0, 1)
     return Batch(src, trg, pad_idx)
+
+def elmo_rebatch(pad_idx, batch, vocab, device):
+    from allennlp.modules.elmo import batch_to_ids
+    "Fix order in torchtext to match ours"
+    src, trg = [], []
+    src_y, trg_y = batch.src.transpose(0, 1), batch.trg.transpose(0, 1)
+
+    for i in range(len(batch)):
+        src.append([vocab.itos[id.item()] for id in src_y[i]])
+        trg.append([vocab.itos[id.item()] for id in trg_y[i]])
+
+    src, trg = batch_to_ids(src).to(device), batch_to_ids(trg).to(device)
+    # print("ELMo shape src, trg: ", src.shape, trg.shape)
+
+    return Elmo_Batch(src, src_y, trg, trg_y, pad_idx)

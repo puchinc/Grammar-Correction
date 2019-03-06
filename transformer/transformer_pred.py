@@ -26,7 +26,7 @@ import os
 import sys
 import random
 
-from Model import MyIterator, make_model, batch_size_fn
+from Model import MyIterator, make_model, batch_size_fn, greedy_decode
 
 def main():
     BOS_WORD = '<s>'
@@ -137,6 +137,8 @@ def main():
         f_trg.write(target)
         f_pred.write(pred)
 
+    f_src.close()
+    f_trg.close()
     f_pred.close()
 
 if __name__ == "__main__":
