@@ -34,6 +34,7 @@ def main():
     EOS_WORD = '</s>'
     BLANK_WORD = "<blank>"
 
+    DATA = 'aesw'
     # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
     EMB = 'bow'
     # EMB = 'elmo'
@@ -53,8 +54,8 @@ def main():
     eval_dir = os.path.join(root_dir, 'data/eval')
     elmo_options_file = os.path.join(root_dir, 'data/embs/elmo.json')
     elmo_weights_file = os.path.join(root_dir, 'data/embs/elmo.hdf5')
-    model_file = os.path.join(root_dir, 'data/models', EMB + '.transformer.pt')
-    vocab_file = os.path.join(root_dir, 'data/models', EMB + '.english.vocab')
+    model_file = os.path.join(root_dir, 'data/models', '%s.%s.transformer.pt' % (DATA, EMB))
+    vocab_file = os.path.join(root_dir, 'data/models', '%s.vocab' % (DATA))
 
     for folder in [src_dir, eval_dir]:
         if not os.path.exists(folder): 
@@ -70,10 +71,10 @@ def main():
     TEXT = data.Field(tokenize=tokenize_en, init_token = BOS_WORD,
                      eos_token = EOS_WORD, pad_token=BLANK_WORD)
 
-    train = datasets.TranslationDataset(path=os.path.join(src_dir, 'aesw.train'),
-            exts=('.src', '.trg'), fields=(TEXT, TEXT))
-    val = datasets.TranslationDataset(path=os.path.join(src_dir, 'aesw.val'), 
-            exts=('.src', '.trg'), fields=(TEXT, TEXT))
+    train = datasets.TranslationDataset(path=os.path.join(src_dir, DATA),
+            exts=('.train.src', '.train.trg'), fields=(TEXT, TEXT))
+    val = datasets.TranslationDataset(path=os.path.join(src_dir, DATA), 
+            exts=('.val.src', '.val.trg'), fields=(TEXT, TEXT))
 
     train_iter = MyIterator(train, batch_size=BATCH_SIZE, device=device,
                             repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
@@ -86,19 +87,26 @@ def main():
     print(train[random_idx].src)
     print(train[random_idx].trg)
 
+    ###############
+    #  Vocabuary  #
+    ###############
+    if os.path.exists(vocab_file):
+        TEXT.vocab = torch.load(vocab_file)
+    else:
+        if 'glove' in EMB:
+            TEXT.build_vocab(train.src, vectors=EMB)
+        else:
+            MIN_FREQ = 2
+            TEXT.build_vocab(train.src, min_freq=MIN_FREQ)
+        print("Save %s Vocabuary..." % (DATA))
+        torch.save(TEXT.vocab, vocab_file)
+        
+    pad_idx = TEXT.vocab.stoi["<blank>"]
+    print("Vocab size: ", len(TEXT.vocab))
+
     #####################
     #   Word Embedding  #
     #####################
-    if 'glove' in EMB:
-        TEXT.build_vocab(train.src, vectors=EMB)
-    else:
-        MIN_FREQ = 2
-        TEXT.build_vocab(train.src, min_freq=MIN_FREQ)
-    pad_idx = TEXT.vocab.stoi["<blank>"]
-    print("Vocab size: ", len(TEXT.vocab))
-    print("Save Vocabuary...")
-    torch.save(TEXT.vocab, vocab_file)
-
     data_generator, emb, EMB_DIM = build_pretrained(EMB, TEXT.vocab, device, 
             elmo_options=elmo_options_file, elmo_weights=elmo_weights_file)
 
@@ -115,6 +123,21 @@ def main():
                         torch.optim.Adam(model.parameters(), lr=0, 
                         betas=(0.9, 0.98), eps=1e-9))
 
+    print("Training %s %s ..." % (DATA, EMB))
+    ### SINGLE GPU
+    for epoch in range(EPOCHES):
+        model.train()
+        run_epoch(data_generator(train_iter), model, 
+                  SimpleLossCompute(model.generator, criterion, opt=model_opt),
+                  vocab=TEXT.vocab, emb=EMB)
+        print("Save Model...")
+        torch.save(model.state_dict(), model_file)
+
+        model.eval()
+        loss = run_epoch(data_generator(valid_iter), model, 
+                          SimpleLossCompute(model.generator, criterion, opt=None))
+        print("Epoch %d/%d - Loss: %f" % (epoch + 1, EPOCHES, loss))
+
     ### MULTIPLE GPU
     # model_par = nn.DataParallel(model, device_ids=devices)
     # for epoch in range(EPOCHES):
@@ -129,20 +152,6 @@ def main():
         # loss = run_epoch(data_generator(valid_iter), model_par, 
                          # MultiGPULossCompute(model.generator, criterion, devices, opt=None))
         # print("Epoch %d/%d - Loss: %f" % (epoch + 1, EPOCHES, loss))
-
-    ### SINGLE GPU
-    for epoch in range(EPOCHES):
-        model.train()
-        run_epoch(data_generator(train_iter), model, 
-                  SimpleLossCompute(model.generator, criterion, opt=model_opt),
-                  vocab=TEXT.vocab)
-        print("Save Model...")
-        torch.save(model.state_dict(), model_file)
-
-        model.eval()
-        loss = run_epoch(data_generator(valid_iter), model, 
-                          SimpleLossCompute(model.generator, criterion, opt=None))
-        print("Epoch %d/%d - Loss: %f" % (epoch + 1, EPOCHES, loss))
 
 
 if __name__ == "__main__":

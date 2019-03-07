@@ -35,9 +35,10 @@ def main():
     EOS_WORD = '</s>'
     BLANK_WORD = "<blank>"
 
+    DATA = 'aesw'
     # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
+    # EMB = 'bow'
     EMB = 'elmo'
-    EMB = 'bow'
     # EMB = 'glove.6B.200d'
     EMB_DIM = 512
     BATCH_SIZE = 250
@@ -52,8 +53,8 @@ def main():
     eval_dir = os.path.join(root_dir, 'data/eval')
     elmo_options_file = os.path.join(root_dir, 'data/embs/elmo.json')
     elmo_weights_file = os.path.join(root_dir, 'data/embs/elmo.hdf5')
-    model_file = os.path.join(root_dir, 'data/models', EMB + '.transformer.pt')
-    vocab_file = os.path.join(root_dir, 'data/models', EMB + '.english.vocab')
+    model_file = os.path.join(root_dir, 'data/models', '%s.%s.transformer.pt' % (DATA, EMB))
+    vocab_file = os.path.join(root_dir, 'data/models', '%s.vocab' % (DATA))
 
     if not os.path.exists(eval_dir):
         os.makedirs(eval_dir)
@@ -68,9 +69,9 @@ def main():
 
     TEXT = data.Field(tokenize=tokenize_en, init_token = BOS_WORD,
                      eos_token = EOS_WORD, pad_token=BLANK_WORD)
-    TEXT.vocab = torch.load(vocab_file)
-    test = datasets.TranslationDataset(path=os.path.join(src_dir, 'aesw.test'), 
-            exts=('.src', '.trg'), fields=(TEXT, TEXT))
+
+    test = datasets.TranslationDataset(path=os.path.join(src_dir, DATA), 
+            exts=('.test.src', '.test.trg'), fields=(TEXT, TEXT))
     test_iter = MyIterator(test, batch_size=BATCH_SIZE, device=device,
                             repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
                             batch_size_fn=batch_size_fn, train=False)
@@ -78,6 +79,11 @@ def main():
     random_idx = random.randint(0, len(test) - 1)
     print(test[random_idx].src)
     print(test[random_idx].trg)
+
+    ###############
+    #  Vocabuary  #
+    ###############
+    TEXT.vocab = torch.load(vocab_file)
     print("Vocab size: ", len(TEXT.vocab))
 
     #####################
@@ -92,10 +98,6 @@ def main():
     model = make_model(len(TEXT.vocab), emb, d_model=EMB_DIM).to(device)
     model.load_state_dict(torch.load(model_file))
     model.eval()
-
-    f_src = open(os.path.join(eval_dir, 'lang8.eval.src'), 'w+')
-    f_trg = open(os.path.join(eval_dir, 'lang8.eval.trg'), 'w+')
-    f_pred = open(os.path.join(eval_dir, 'lang8.eval.pred'), 'w+')
 
     for batch in test_iter:
         src = batch.src.transpose(0, 1)
@@ -121,6 +123,10 @@ def main():
             # trans += sym + " "
         # print(trans)
     sys.exit()
+
+    f_src = open(os.path.join(eval_dir, 'lang8.eval.src'), 'w+')
+    f_trg = open(os.path.join(eval_dir, 'lang8.eval.trg'), 'w+')
+    f_pred = open(os.path.join(eval_dir, 'lang8.eval.pred'), 'w+')
 
     for i, batch in enumerate(test_iter):
         # source

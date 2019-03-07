@@ -332,7 +332,7 @@ class Elmo_Batch:
 
 """ Training Loop """
 
-def run_epoch(data_iter, model, loss_compute, vocab=None):
+def run_epoch(data_iter, model, loss_compute, vocab=None, emb=None):
     "Standard Training and Logging Function"
     start = time.time()
     total_tokens = 0
@@ -356,9 +356,10 @@ def run_epoch(data_iter, model, loss_compute, vocab=None):
             start = time.time()
             tokens = 0
             
-            if vocab:
+            # evaluate translation quality
+            if vocab and emb:
                 out = greedy_decode(model, batch.src, batch.src_mask, 
-                                    vocab, emb='elmo', max_len=60)
+                                    vocab, emb, max_len=60)
                 print("Translation:", ' '.join(out[0]).split('</s>')[0])
 
     return total_loss / total_tokens
@@ -519,18 +520,22 @@ class MultiGPULossCompute:
 
 def greedy_decode(model, src, src_mask, vocab, emb='glove', max_len=60):
     batch_size = src.size(0)
-    sent = [['<s>'] for _ in range(batch_size)]
+    sentences = [[''] for _ in range(batch_size)]
+    start_symbols = [vocab.stoi["<s>"]] * batch_size
 
-    if 'elmo' in emb:
-        # ELMo: batch * 1 * 50
-        ys = batch_to_ids(sent).type_as(src.data)
-    else:
-        # Glove: batch * words
-        start_symbol=vocab.stoi["<s>"]
-        ys = torch.ones(batch_size, 1).fill_(start_symbol).type_as(src.data)
+    def get_ys(inputs):
+        if 'elmo' in emb:
+            # ELMo: batch * 1 * 50
+            ys = batch_to_ids(inputs).type_as(src.data)
+        else:
+            # Glove: batch * words
+            ys = torch.Tensor(inputs).transpose(0, 1).type_as(src.data)
+        return ys
+
+    inputs = sentences if emb=='elmo' else start_symbols
+    ys = get_ys(inputs)
 
     memory = model.encode(src, src_mask)
-
     for i in range(max_len - 1):
         # print("memory, src_mask, ys, ys_mask: ", memory.shape, src_mask.shape, 
                # Variable(ys).shape, Variable(subsequent_mask(ys.size(1)).type_as(src.data)).shape)
@@ -540,20 +545,20 @@ def greedy_decode(model, src, src_mask, vocab, emb='glove', max_len=60):
                                     .type_as(src.data)))
         prob = model.generator(out[:, -1])
         _, next_words = torch.max(prob, dim = 1)
-        # sent[0] += [vocab.itos[next_words]]
-        # next_words = next_words.item()
+        next_words = list(next_words)
+
+        # print("Next words: ", next_words)
         for i in range(batch_size):
-            sent[i] += [vocab.itos[next_words[i].item()]]
+            sentences[i] += [vocab.itos[next_words[i]]]
 
         if 'elmo' in emb:
-            ys = batch_to_ids(sent).type_as(src.data)
+            ys = get_ys(sentences)
         else:
-            # ys = torch.cat([ys, torch.ones(1, 1).fill_(next_word).type_as(src.data)], dim=1)
-            ys = torch.cat([ys, torch.Tensor([next_words]).transpose(0, 1).type_as(src.data)], dim=1)
+            ys = torch.cat([ys, get_ys([next_words])], dim=1)
 
-    # print("Trg snetence: ", sent)
+    # print("Trg snetence: ", sentences)
     # return ys
-    return sent
+    return sentences
 
 #####################
 #     Iterator      #
