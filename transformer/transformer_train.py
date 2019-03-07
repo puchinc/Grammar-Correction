@@ -27,7 +27,7 @@ import sys
 import random
 
 from Model import MyIterator, LabelSmoothing, NoamOpt, MultiGPULossCompute, SimpleLossCompute, Batch, Elmo_Batch
-from Model import build_model, run_epoch, rebatch, batch_size_fn, elmo_rebatch, build_pretrained
+from Model import make_model, run_epoch, rebatch, batch_size_fn, elmo_rebatch, build_pretrained
 
 def main():
     BOS_WORD = '<s>'
@@ -35,8 +35,8 @@ def main():
     BLANK_WORD = "<blank>"
 
     # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
-    # EMB = 'bow'
-    EMB = 'elmo'
+    EMB = 'bow'
+    # EMB = 'elmo'
     # EMB = 'glove.6B.200d'
     EMB_DIM = 512
     BATCH_SIZE = 500
@@ -51,15 +51,14 @@ def main():
     src_dir = os.path.join(root_dir, 'data/src')
     test_dir = os.path.join(root_dir, 'data/test')
     eval_dir = os.path.join(root_dir, 'data/eval')
-    model_file = os.path.join(root_dir, 'data/models', EMB + '.transformer.pt')
     elmo_options_file = os.path.join(root_dir, 'data/embs/elmo.json')
     elmo_weights_file = os.path.join(root_dir, 'data/embs/elmo.hdf5')
-    vocab_file = os.path.join(root_dir, 'data/models', 'english.vocab')
+    model_file = os.path.join(root_dir, 'data/models', EMB + '.transformer.pt')
+    vocab_file = os.path.join(root_dir, 'data/models', EMB + '.english.vocab')
 
-    if not os.path.exists(src_dir):
-        os.makedirs(src_dir)
-    if not os.path.exists(eval_dir):
-        os.makedirs(eval_dir)
+    for folder in [src_dir, eval_dir]:
+        if not os.path.exists(folder): 
+            os.makedirs(folder) 
 
     #####################
     #   Data Loading    #
@@ -71,9 +70,9 @@ def main():
     TEXT = data.Field(tokenize=tokenize_en, init_token = BOS_WORD,
                      eos_token = EOS_WORD, pad_token=BLANK_WORD)
 
-    train = datasets.TranslationDataset(path=os.path.join(src_dir, 'lang8.train'),
+    train = datasets.TranslationDataset(path=os.path.join(src_dir, 'aesw.train'),
             exts=('.src', '.trg'), fields=(TEXT, TEXT))
-    val = datasets.TranslationDataset(path=os.path.join(src_dir, 'lang8.val'), 
+    val = datasets.TranslationDataset(path=os.path.join(src_dir, 'aesw.val'), 
             exts=('.src', '.trg'), fields=(TEXT, TEXT))
 
     train_iter = MyIterator(train, batch_size=BATCH_SIZE, device=device,
@@ -96,6 +95,7 @@ def main():
         MIN_FREQ = 2
         TEXT.build_vocab(train.src, min_freq=MIN_FREQ)
     pad_idx = TEXT.vocab.stoi["<blank>"]
+    print("Vocab size: ", len(TEXT.vocab))
     print("Save Vocabuary...")
     torch.save(TEXT.vocab, vocab_file)
 
@@ -105,7 +105,10 @@ def main():
     ##########################
     #   Training the System  #
     ##########################
-    model = build_model(len(TEXT.vocab), emb, d_model=EMB_DIM).to(device)
+    model = make_model(len(TEXT.vocab), emb, d_model=EMB_DIM).to(device)
+    # if os.path.exists(model_file):
+        # model.load_state_dict(torch.load(model_file))
+
     criterion = LabelSmoothing(size=len(TEXT.vocab), padding_idx=pad_idx, smoothing=0.1).to(device)
 
     model_opt = NoamOpt(EMB_DIM, 1, 2000,
@@ -130,15 +133,14 @@ def main():
     ### SINGLE GPU
     for epoch in range(EPOCHES):
         model.train()
-        run_epoch(data_generator(train_iter), 
-                  model, 
-                  SimpleLossCompute(model.generator, criterion, opt=model_opt))
+        run_epoch(data_generator(train_iter), model, 
+                  SimpleLossCompute(model.generator, criterion, opt=model_opt),
+                  vocab=TEXT.vocab)
         print("Save Model...")
         torch.save(model.state_dict(), model_file)
 
         model.eval()
-        loss = run_epoch(data_generator(valid_iter), 
-                          model, 
+        loss = run_epoch(data_generator(valid_iter), model, 
                           SimpleLossCompute(model.generator, criterion, opt=None))
         print("Epoch %d/%d - Loss: %f" % (epoch + 1, EPOCHES, loss))
 

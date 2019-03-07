@@ -13,6 +13,7 @@ from allennlp.modules.elmo import Elmo, batch_to_ids
 import os
 import sys
 import random
+from pprint import pprint
 
 ##############################
 #      Model Architecture    #
@@ -40,7 +41,6 @@ class EncoderDecoder(nn.Module):
         return self.encoder(self.src_embed(src), src_mask)
     
     def decode(self, memory, src_mask, tgt, tgt_mask):
-        # print("Start to decode...")
         return self.decoder(self.tgt_embed(tgt), memory, src_mask, tgt_mask)
 
 class Generator(nn.Module):
@@ -72,12 +72,8 @@ class Encoder(nn.Module):
     def forward(self, x, mask):
         "Pass the input (and mask) through each layer in turn."
 
-        # TODO Bug here
         for layer in self.layers:
             x = layer(x, mask)
-            # print("Stacking Layers...")
-        # Bug up
-
         return self.norm(x)
 
 class LayerNorm(nn.Module):
@@ -105,7 +101,6 @@ class SublayerConnection(nn.Module):
 
     def forward(self, x, sublayer):
         "Apply residual connection to any sublayer with the same size."
-        # print("SublayerConnection... ", x.shape)
         return x + self.dropout(sublayer(self.norm(x)))
 
 class EncoderLayer(nn.Module):
@@ -119,9 +114,7 @@ class EncoderLayer(nn.Module):
 
     def forward(self, x, mask):
         "Follow Figure 1 (left) for connections."
-        # print("Before EncoderLayer...", x.shape)
         x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, mask))
-        # print("After EncoderLayer...", x.shape)
         return self.sublayer[1](x, self.feed_forward)
 
 """ Decoder """
@@ -228,24 +221,11 @@ class PositionwiseFeedForward(nn.Module):
 #   Embeddings and Softmax  #
 #############################
 
-class Embedding(nn.Module):
+class Embeddings(nn.Module):
     def __init__(self, embedding, d_model):
-        super(Embedding, self).__init__()
+        super(Embeddings, self).__init__()
         self.lut = embedding
         self.d_model = d_model
-
-    def forward(self, x):
-        # print("Embedding: ", self.lut(x).shape)
-        return self.lut(x) * math.sqrt(self.d_model)
-
-class Embeddings(nn.Module):
-    def __init__(self, d_model, vocab, weight=None):
-        super(Embeddings, self).__init__()
-        self.d_model = d_model
-        if weight is not None:
-            self.lut = nn.Embedding.from_pretrained(weight)
-        else:
-            self.lut = nn.Embedding(vocab, d_model)
 
     def forward(self, x):
         return self.lut(x) * math.sqrt(self.d_model)
@@ -281,7 +261,7 @@ class PositionalEncoding(nn.Module):
 #      Full Model      #
 ########################
 
-def build_model(vocab_size, emb, d_model=512, N=6, d_ff=2048, h=8, dropout=0.1):
+def make_model(vocab_size, emb, d_model=512, N=6, d_ff=2048, h=8, dropout=0.1):
     "Helper: Construct a model from hyperparameters."
     src_vocab = trg_vocab = vocab_size
     c = copy.deepcopy
@@ -292,33 +272,8 @@ def build_model(vocab_size, emb, d_model=512, N=6, d_ff=2048, h=8, dropout=0.1):
         Encoder(EncoderLayer(d_model, c(attn), c(ff), dropout), N),
         Decoder(DecoderLayer(d_model, c(attn), c(attn), 
                              c(ff), dropout), N),
-        nn.Sequential(Embedding(emb, d_model), c(position)),
-        nn.Sequential(Embedding(emb, d_model), c(position)),
-        Generator(d_model, trg_vocab))
-    
-    # This was important from their code. 
-    # Initialize parameters with Glorot / fan_avg.
-    for p in model.parameters():
-        if p.dim() > 1:
-            nn.init.xavier_uniform_(p)
-    return model
-
-def make_model(vocab_size, N=6, d_model=512, d_ff=2048, h=8, 
-        dropout=0.1, emb_weight=None):
-    "Helper: Construct a model from hyperparameters."
-    src_vocab = trg_vocab = vocab_size
-    c = copy.deepcopy
-    attn = MultiHeadedAttention(h, d_model)
-    ff = PositionwiseFeedForward(d_model, d_ff, dropout)
-    position = PositionalEncoding(d_model, dropout)
-    model = EncoderDecoder(
-        Encoder(EncoderLayer(d_model, c(attn), c(ff), dropout), N),
-        Decoder(DecoderLayer(d_model, c(attn), c(attn), 
-                             c(ff), dropout), N),
-        nn.Sequential(Embeddings(d_model, src_vocab, 
-            weight=emb_weight), c(position)),
-        nn.Sequential(Embeddings(d_model, src_vocab, 
-            weight=emb_weight), c(position)),
+        nn.Sequential(Embeddings(emb, d_model), c(position)),
+        nn.Sequential(Embeddings(emb, d_model), c(position)),
         Generator(d_model, trg_vocab))
     
     # This was important from their code. 
@@ -343,12 +298,10 @@ class Batch:
         self.src = src
         self.src_mask = (src != pad).unsqueeze(-2)
         if trg is not None:
-            # print("TRG: ", trg)
             self.trg = trg[:, :-1]
             self.trg_y = trg[:, 1:]
             self.trg_mask = self.make_std_mask(self.trg, pad)
             self.ntokens = (self.trg_y != pad).data.sum().item()
-            # print("Batch Masking: ", src.shape, self.src_mask.shape, self.trg.shape, self.trg_mask.shape, self.trg_y.shape)
     
     @staticmethod
     def make_std_mask(tgt, pad):
@@ -379,7 +332,7 @@ class Elmo_Batch:
 
 """ Training Loop """
 
-def run_epoch(data_iter, model, loss_compute):
+def run_epoch(data_iter, model, loss_compute, vocab=None):
     "Standard Training and Logging Function"
     start = time.time()
     total_tokens = 0
@@ -402,6 +355,12 @@ def run_epoch(data_iter, model, loss_compute):
                     (i, loss / batch.ntokens, tokens / elapsed))
             start = time.time()
             tokens = 0
+            
+            if vocab:
+                out = greedy_decode(model, batch.src, batch.src_mask, 
+                                    vocab, emb='elmo', max_len=60)
+                print("Translation:", ' '.join(out[0]).split('</s>')[0])
+
     return total_loss / total_tokens
 
 """ Training Data and Batching """
@@ -558,20 +517,43 @@ class MultiGPULossCompute:
             self.opt.optimizer.zero_grad()
         return total * normalize
 
-def greedy_decode(model, src, src_mask, max_len, start_symbol):
+def greedy_decode(model, src, src_mask, vocab, emb='glove', max_len=60):
+    batch_size = src.size(0)
+    sent = [['<s>'] for _ in range(batch_size)]
+
+    if 'elmo' in emb:
+        # ELMo: batch * 1 * 50
+        ys = batch_to_ids(sent).type_as(src.data)
+    else:
+        # Glove: batch * words
+        start_symbol=vocab.stoi["<s>"]
+        ys = torch.ones(batch_size, 1).fill_(start_symbol).type_as(src.data)
+
     memory = model.encode(src, src_mask)
-    ys = torch.ones(1, 1).fill_(start_symbol).type_as(src.data)
-    for i in range(max_len-1):
-        out = model.decode(memory, src_mask, 
-                           Variable(ys), 
+
+    for i in range(max_len - 1):
+        # print("memory, src_mask, ys, ys_mask: ", memory.shape, src_mask.shape, 
+               # Variable(ys).shape, Variable(subsequent_mask(ys.size(1)).type_as(src.data)).shape)
+
+        out = model.decode(memory, src_mask, Variable(ys), 
                            Variable(subsequent_mask(ys.size(1))
                                     .type_as(src.data)))
         prob = model.generator(out[:, -1])
-        _, next_word = torch.max(prob, dim = 1)
-        next_word = next_word.item()
-        ys = torch.cat([ys, 
-                        torch.ones(1, 1).type_as(src.data).fill_(next_word)], dim=1)
-    return ys
+        _, next_words = torch.max(prob, dim = 1)
+        # sent[0] += [vocab.itos[next_words]]
+        # next_words = next_words.item()
+        for i in range(batch_size):
+            sent[i] += [vocab.itos[next_words[i].item()]]
+
+        if 'elmo' in emb:
+            ys = batch_to_ids(sent).type_as(src.data)
+        else:
+            # ys = torch.cat([ys, torch.ones(1, 1).fill_(next_word).type_as(src.data)], dim=1)
+            ys = torch.cat([ys, torch.Tensor([next_words]).transpose(0, 1).type_as(src.data)], dim=1)
+
+    # print("Trg snetence: ", sent)
+    # return ys
+    return sent
 
 #####################
 #     Iterator      #
@@ -601,17 +583,16 @@ def rebatch(pad_idx, batch):
     return Batch(src, trg, pad_idx)
 
 def elmo_rebatch(pad_idx, batch, vocab, device):
-    from allennlp.modules.elmo import batch_to_ids
     "Fix order in torchtext to match ours"
     src, trg = [], []
-    src_y, trg_y = batch.src.transpose(0, 1), batch.trg.transpose(0, 1)
+    # remove src </s> and trg <s>
+    src_y, trg_y = batch.src.transpose(0, 1)[:, :-1], batch.trg.transpose(0, 1)[:, 1:]
 
     for i in range(len(batch)):
         src.append([vocab.itos[id.item()] for id in src_y[i]])
         trg.append([vocab.itos[id.item()] for id in trg_y[i]])
 
     src, trg = batch_to_ids(src).to(device), batch_to_ids(trg).to(device)
-    # print("ELMo shape src, trg: ", src.shape, trg.shape)
 
     return Elmo_Batch(src, src_y, trg, trg_y, pad_idx)
 
@@ -623,19 +604,19 @@ options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_5
 weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
 def build_pretrained(emb_name, vocab, device, elmo_options=options_file, elmo_weights=weight_file):
     data_generator, emb, emb_dim = None, None, 512
+
     pad_idx = vocab.stoi["<blank>"]
     if 'glove' in emb_name:
         emb_dim = 200
         data_generator = lambda data: (rebatch(pad_idx, b) for b in data)
-        emb = nn.Embedding.from_pretrained(field.vocab.vectors)
+        emb = nn.Embedding.from_pretrained(vocab.vectors)
 
     elif 'elmo' in emb_name: 
-        from allennlp.modules.elmo import Elmo
         elmo = Elmo(elmo_options, elmo_weights, 1, dropout=0).to(device)
 
         emb_dim = 1024
         data_generator = lambda data: (elmo_rebatch(pad_idx, b, vocab, device) for b in data)
-        emb = lambda ids: elmo(ids)['elmo_representations'][0]
+        emb = lambda char_ids: elmo(char_ids)['elmo_representations'][0]
 
     # TODO bert embedding
     elif 'bert' in emb_name: pass

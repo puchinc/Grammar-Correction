@@ -25,8 +25,10 @@ import spacy
 import os
 import sys
 import random
+from pprint import pprint
 
-from Model import MyIterator, build_model, batch_size_fn, greedy_decode, build_pretrained
+from Model import MyIterator, make_model, batch_size_fn, greedy_decode, build_pretrained
+from allennlp.modules.elmo import batch_to_ids
 
 def main():
     BOS_WORD = '<s>'
@@ -34,11 +36,11 @@ def main():
     BLANK_WORD = "<blank>"
 
     # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
-    # EMB = 'bow'
     EMB = 'elmo'
+    EMB = 'bow'
     # EMB = 'glove.6B.200d'
     EMB_DIM = 512
-    BATCH_SIZE = 2500
+    BATCH_SIZE = 250
 
     # GPU to use
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -48,10 +50,10 @@ def main():
     src_dir = os.path.join(root_dir, 'data/src')
     test_dir = os.path.join(root_dir, 'data/test')
     eval_dir = os.path.join(root_dir, 'data/eval')
-    model_path = os.path.join(root_dir, 'data/models', EMB + '.transformer.pt')
     elmo_options_file = os.path.join(root_dir, 'data/embs/elmo.json')
     elmo_weights_file = os.path.join(root_dir, 'data/embs/elmo.hdf5')
-    vocab_path = os.path.join(root_dir, 'data/models', 'english.vocab')
+    model_file = os.path.join(root_dir, 'data/models', EMB + '.transformer.pt')
+    vocab_file = os.path.join(root_dir, 'data/models', EMB + '.english.vocab')
 
     if not os.path.exists(eval_dir):
         os.makedirs(eval_dir)
@@ -66,8 +68,8 @@ def main():
 
     TEXT = data.Field(tokenize=tokenize_en, init_token = BOS_WORD,
                      eos_token = EOS_WORD, pad_token=BLANK_WORD)
-    TEXT.vocab = torch.load(vocab_path)
-    test = datasets.TranslationDataset(path=os.path.join(src_dir, 'lang8.test'), 
+    TEXT.vocab = torch.load(vocab_file)
+    test = datasets.TranslationDataset(path=os.path.join(src_dir, 'aesw.test'), 
             exts=('.src', '.trg'), fields=(TEXT, TEXT))
     test_iter = MyIterator(test, batch_size=BATCH_SIZE, device=device,
                             repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
@@ -76,30 +78,56 @@ def main():
     random_idx = random.randint(0, len(test) - 1)
     print(test[random_idx].src)
     print(test[random_idx].trg)
+    print("Vocab size: ", len(TEXT.vocab))
 
     #####################
     #   Word Embedding  #
     #####################
-    data_generator, emb, EMB_DIM = build_pretrained(EMB, TEXT.vocab, device, 
+    _, emb, EMB_DIM = build_pretrained(EMB, TEXT.vocab, device, 
             elmo_options=elmo_options_file, elmo_weights=elmo_weights_file)
 
     ##########################
     #      Translation       #
     ##########################
-    model = build_model(len(TEXT.vocab), emb, d_model=EMB_DIM).to(device)
-    model.load_state_dict(torch.load(model_path))
-    model.to(device)
+    model = make_model(len(TEXT.vocab), emb, d_model=EMB_DIM).to(device)
+    model.load_state_dict(torch.load(model_file))
+    model.eval()
 
     f_src = open(os.path.join(eval_dir, 'lang8.eval.src'), 'w+')
     f_trg = open(os.path.join(eval_dir, 'lang8.eval.trg'), 'w+')
     f_pred = open(os.path.join(eval_dir, 'lang8.eval.pred'), 'w+')
-    
+
+    for batch in test_iter:
+        src = batch.src.transpose(0, 1)
+        src_mask = (src != TEXT.vocab.stoi["<blank>"]).unsqueeze(-2)
+        batch_size = len(src)
+
+        if 'elmo' in EMB:
+            sen = []
+            for i in range(batch_size):
+                sen.append([TEXT.vocab.itos[id.item()] for id in src[i]])
+            src = batch_to_ids(sen).type_as(src.data)
+
+        src = Variable(src)
+
+        out = greedy_decode(model, src, src_mask, TEXT.vocab, emb=EMB, max_len=60)
+        for sen in out:
+            print("Translation:", ' '.join(sen).split('</s>')[0])
+
+        # trans = "<s> "
+        # for i in range(1, out.size(1)):
+            # sym = TEXT.vocab.itos[out[0, i]]
+            # if sym == "</s>": break
+            # trans += sym + " "
+        # print(trans)
+    sys.exit()
+
     for i, batch in enumerate(test_iter):
         # source
-        src = batch.src.transpose(0, 1)[:1]
         source = ""
         for i in range(1, batch.src.size(0)):
             sym = TEXT.vocab.itos[batch.src.data[i, 0]]
+            print("Batch.src.data ", batch.src.data, batch.src.data[i, 0])
             if sym == "</s>": break
             source += sym + " "
         source += '\n'
@@ -116,6 +144,15 @@ def main():
 
         # translation 
         src_mask = (src != TEXT.vocab.stoi["<blank>"]).unsqueeze(-2)
+
+        if 'elmo' in EMB:
+            sentences = []
+            for i in range(len(src)):
+                sentences.append([TEXT.vocab.itos[id.item()] for id in src[i]])
+            src = batch_to_ids(sentences).to(device)
+            print(sentences)
+        print(src.shape, src_mask.shape)
+
         out = greedy_decode(model, src, src_mask, 
                             max_len=60, start_symbol=TEXT.vocab.stoi["<s>"])
         pred = ""

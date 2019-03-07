@@ -9,7 +9,7 @@ Three datasets
 2. Lang8
 3. AESW Dataset 
 
-#### Step 1: Preprocess the data
+### Step 1: Preprocess the data
 ```
 python parser/lang8_parser.py \
        -i lang-8-20111007-L1-v2.dat \
@@ -17,7 +17,7 @@ python parser/lang8_parser.py \
        -l2 English
 ```
 
-#### Step 2: Split datasets
+### Step 2: Split datasets
 ```
 awk -F $'\t' '{print $1}' data/src/lang8.txt > data/src/lang8.src 
 awk -F $'\t' '{print $2}' data/src/lang8.txt > data/src/lang8.trg
@@ -41,19 +41,17 @@ python ../../prepare_csv.py \
 cd -
 ```
 
-#### Step 3: Download pretrained word embeddings
+### Step 3: Download pretrained word embeddings
 ```
 wget -P data/embs/ https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json
 wget -P data/embs/ https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5
 ```
 
-#### Step 4: Virtualenv
-
-You need three virtualenvs named allennlp, torch, and transformer\_env. allennlp is for the ELMo embedding, torch is for machine translation, and transformer\_env is for the Transformer model. GPU is required for generating new elmo embeddings and Python3 is used.
+### Step 4: Virtualenv
 
 [Transformer] http://www.realworldnlpbook.com/blog/building-seq2seq-machine-translation-models-using-allennlp.html
 [ELMo] https://github.com/allenai/allennlp/blob/master/tutorials/how_to/elmo.md 
-* allennlp
+* transformer\_env
 
         pip install allennlp
         pip install torch numpy matplotlib spacy torchtext seaborn 
