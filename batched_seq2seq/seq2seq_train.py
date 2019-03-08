@@ -27,12 +27,15 @@ from torch.utils.data import Dataset, DataLoader
 import spacy
 nlp = spacy.load('en_core_web_lg') # For the glove embeddings
 import pickle
+from allennlp.modules.elmo import Elmo, batch_to_ids
+import h5py
 
 """ Enable GPU training """
 USE_CUDA = torch.cuda.is_available()
 print('Use_CUDA={}'.format(USE_CUDA))
 if USE_CUDA:
     # You can change device by `torch.cuda.set_device(device_id)`
+    torch.cuda.set_device(2)
     print('current_device={}'.format(torch.cuda.current_device()))
     
 import codecs
@@ -55,11 +58,11 @@ def parse_args():
     args = parser.parse_args()                                      
     return args
 
-def save_model(train_dataset, encoder, decoder, opts):
-    pickle.dump(train_dataset,open('train_dataset.pkl','wb'))
-    pickle.dump(encoder,open('encoder.pkl','wb'))
-    pickle.dump(decoder,open('decoder.pkl','wb'))
-    pickle.dump(opts,open('opts.pkl','wb'))
+def save_model(prefix, train_dataset, encoder, decoder, opts):
+    pickle.dump(train_dataset,open(prefix + 'train_dataset.pkl','wb'))
+    pickle.dump(encoder,open(prefix + 'encoder.pkl','wb'))
+    pickle.dump(decoder,open(prefix + 'decoder.pkl','wb'))
+    pickle.dump(opts,open(prefix + 'opts.pkl','wb'))
 
 def main():
     # parse arguments
@@ -183,7 +186,12 @@ def main():
         if opts.fixed_embeddings:
             encoder.embedding.weight.requires_grad = False
             decoder.embedding.weight.requires_grad = False
-    
+    elmo = None
+    if opts.pretrained_embeddings == 'elmo':
+        options_file = '../data/embs/elmo_2x4096_512_2048cnn_2xhighway_options.json'
+        weight_file = '../data/embs/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5'
+        elmo = Elmo(options_file, weight_file, 1, dropout=0)
+
     if LOAD_CHECKPOINT:
         encoder.load_state_dict(checkpoint['encoder_state_dict'])
         decoder.load_state_dict(checkpoint['decoder_state_dict'])
@@ -209,12 +217,13 @@ def main():
     # Initialize optimizers (we can experiment different learning rates)
     encoder_optim = optim.Adam([p for p in encoder.parameters() if p.requires_grad], lr=opts.learning_rate, weight_decay=opts.weight_decay)
     decoder_optim = optim.Adam([p for p in decoder.parameters() if p.requires_grad], lr=opts.learning_rate, weight_decay=opts.weight_decay)
-        
+    
+
     # 1) training
-    training(encoder, decoder, encoder_optim, decoder_optim, train_iter, valid_iter, opts, load_checkpoint, checkpoint)
+    training(encoder, decoder, encoder_optim, decoder_optim, train_iter, valid_iter, opts, load_checkpoint, checkpoint, elmo)
      
     print('Done training. Start Validation.')
-    
+    save_model('', train_dataset, encoder, decoder, opts) 
     # 2) validation 
     total_loss = 0
     total_corrects = 0
@@ -227,7 +236,7 @@ def main():
             print('[!] Ignore batch: sequence length={} > max sequence length={}'.format(max_seq_len, opts.max_seq_len))
             continue
         loss, pred_seqs, attention_weights, num_corrects, num_words \
-                = evaluate(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens, encoder, decoder, opts)
+                = evaluate(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens, encoder, decoder, opts, elmo)
 
         total_loss += loss
         total_corrects += num_corrects
@@ -243,7 +252,7 @@ def main():
     print('='*100 + '\n')
     
     # save model
-    save_model(train_dataset, encoder, decoder, opts)        
+    save_model('',train_dataset, encoder, decoder, opts)        
 
 if __name__ == '__main__':
     main()

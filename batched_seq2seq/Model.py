@@ -215,7 +215,7 @@ class EncoderRNN(nn.Module):
         packed_outputs, hidden = self.rnn(packed_emb, hidden)
 
         # outputs: (max_src_len, batch_size, hidden_size * num_directions)
-        # output_lens == src_lensˇ
+        # output_lens == src_lens
         outputs, output_lens =  nn.utils.rnn.pad_packed_sequence(packed_outputs)
         
         if self.bidirectional:
@@ -430,10 +430,7 @@ def load_spacy_glove_embedding(spacy_nlp, vocab):
     return torch.from_numpy(embedding).float()
 
 # elmo embedding 
-def load_elmo_embeddings(sentences, max_seq):
-    options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json"
-    weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
-    elmo = Elmo(options_file, weight_file, 2, dropout=0)
+def load_elmo_embeddings(sentences, max_seq, elmo):
     character_ids = batch_to_ids(sentences)
     elmo_embeddings = elmo(character_ids)['elmo_representations'][0]
     
@@ -614,7 +611,7 @@ def compute_grad_norm(parameters, norm_type=2):
     return total_norm
 
 def train(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens,
-          encoder, decoder, encoder_optim, decoder_optim, opts):    
+          encoder, decoder, encoder_optim, decoder_optim, opts, elmo):    
     # -------------------------------------
     # Prepare input and output placeholders
     # -------------------------------------
@@ -645,7 +642,7 @@ def train(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens,
 
     # pretrained embedding
     if opts.pretrained_embeddings == 'elmo':
-        elmo_emb = load_elmo_embeddings(src_sents, src_seqs.size()[0])
+        elmo_emb = load_elmo_embeddings(src_sents, src_seqs.size()[0], elmo)
     else:
         elmo_emb = None
 
@@ -733,7 +730,7 @@ def train(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens,
     return loss.item(), pred_seqs, attention_weights, num_corrects, num_words,\
            encoder_grad_norm, decoder_grad_norm, clipped_encoder_grad_norm, clipped_decoder_grad_norm
 
-def training(encoder, decoder, encoder_optim, decoder_optim, train_iter, valid_iter, opts, load_checkpoint, checkpoint):
+def training(encoder, decoder, encoder_optim, decoder_optim, train_iter, valid_iter, opts, load_checkpoint, checkpoint, elmo):
     """ Open port 6006 and see tensorboard.
     Ref:  https://medium.com/@dexterhuang/%E7%B5%A6-pytorch-%E7%94%A8%E7%9A%84-tensorboard-bb341ce3f837
     """
@@ -756,7 +753,7 @@ def training(encoder, decoder, encoder_optim, decoder_optim, train_iter, valid_i
     save_every_step = opts.save_every_step
     # For saving checkpoint and tensorboard
     global_step = 0 if not load_checkpoint else checkpoint['global_step']
-
+    
     # --------------------------
     # Start training
     # --------------------------
@@ -764,7 +761,7 @@ def training(encoder, decoder, encoder_optim, decoder_optim, train_iter, valid_i
     total_corrects = 0
     total_words = 0
     prev_gpu_memory_usage = 0
-     
+
     for epoch in range(num_epochs):
         for batch_id, batch_data in tqdm(enumerate(train_iter)):
 
@@ -779,7 +776,7 @@ def training(encoder, decoder, encoder_optim, decoder_optim, train_iter, valid_i
             # Train.
             loss, pred_seqs, attention_weights, num_corrects, num_words, \
             encoder_grad_norm, decoder_grad_norm, clipped_encoder_grad_norm, clipped_decoder_grad_norm \
-            = train(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens, encoder, decoder, encoder_optim, decoder_optim, opts)
+            = train(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens, encoder, decoder, encoder_optim, decoder_optim, opts, elmo)
 
             # Statistics.
             global_step += 1
@@ -840,7 +837,7 @@ def training(encoder, decoder, encoder_optim, decoder_optim, train_iter, valid_i
     print('Save checkpoint to "{}".'.format(checkpoint_path))
     print('='*100 + '\n')
 
-def evaluate(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens, encoder, decoder, opts):
+def evaluate(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens, encoder, decoder, opts, elmo):
     # -------------------------------------
     # Prepare input and output placeholders
     # -------------------------------------
@@ -870,7 +867,7 @@ def evaluate(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens, encod
     decoder_outputs = Variable(torch.zeros(opts.max_seq_len, batch_size, decoder.vocab_size), volatile=True)
 
     if opts.pretrained_embeddings == 'elmo':
-        elmo_emb = load_elmo_embeddings(src_sents, src_seqs.size()[0])
+        elmo_emb = load_elmo_embeddings(src_sents, src_seqs.size()[0], elmo)
     else:
         elmo_emb = None
     # Move variables from CPU to GPU.
@@ -933,7 +930,7 @@ def evaluate(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens, encod
     
     return loss.item(), pred_seqs, attention_weights, num_corrects, num_words
 
-def translate(src_text, train_dataset, encoder, decoder, opts, max_seq_len, replace_unk=True):
+def translate(src_text, train_dataset, encoder, decoder, opts, elmo, max_seq_len, replace_unk=True):
     # -------------------------------------
     # Prepare input and output placeholders
     # -------------------------------------
@@ -959,7 +956,7 @@ def translate(src_text, train_dataset, encoder, decoder, opts, max_seq_len, repl
    
     # pretrained embedding
     if opts.pretrained_embeddings == 'elmo':
-        elmo_emb = load_elmo_embeddings([src_sent], src_seqs.size()[0])
+        elmo_emb = load_elmo_embeddings([src_sent], src_seqs.size()[0], elmo)
     else:
         elmo_emb = None 
     # Move variables from CPU to GPU.
