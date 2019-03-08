@@ -7,7 +7,7 @@
 # python -m spacy download en 
 
 # Train:
-# python annotated_transformer.py
+# python trainsformer_train.py
 
 # Evaluate:
 # python ../evaluation/gleu.py -s source.txt -r target.txt --hyp pred.txt
@@ -26,37 +26,40 @@ import os
 import sys
 import random
 
-from Model import MyIterator, LabelSmoothing, NoamOpt, MultiGPULossCompute, SimpleLossCompute
-from Model import make_model, run_epoch, rebatch, batch_size_fn
+from Model import MyIterator, LabelSmoothing, NoamOpt, MultiGPULossCompute, SimpleLossCompute, Batch, Elmo_Batch
+from Model import make_model, run_epoch, rebatch, batch_size_fn, elmo_rebatch, build_pretrained
 
 def main():
     BOS_WORD = '<s>'
     EOS_WORD = '</s>'
     BLANK_WORD = "<blank>"
 
+    DATA = 'aesw'
     # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
     EMB = 'bow'
+    # EMB = 'elmo'
     # EMB = 'glove.6B.200d'
     EMB_DIM = 512
-    BATCH_SIZE = 2500
+    BATCH_SIZE = 500
     EPOCHES = 3
 
     # GPU to use
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    devices = [0, 1, 2, 3]
     # device = ("cpu")
+    devices = [0, 1, 2, 3]
 
     root_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
     src_dir = os.path.join(root_dir, 'data/src')
     test_dir = os.path.join(root_dir, 'data/test')
     eval_dir = os.path.join(root_dir, 'data/eval')
-    model_path = os.path.join(root_dir, 'data/models', EMB + '.transformer.pt')
-    vocab_path = os.path.join(root_dir, 'data/models', 'english.vocab')
+    elmo_options_file = os.path.join(root_dir, 'data/embs/elmo.json')
+    elmo_weights_file = os.path.join(root_dir, 'data/embs/elmo.hdf5')
+    model_file = os.path.join(root_dir, 'data/models', '%s.%s.transformer.pt' % (DATA, EMB))
+    vocab_file = os.path.join(root_dir, 'data/models', '%s.vocab' % (DATA))
 
-    if not os.path.exists(src_dir):
-        os.makedirs(src_dir)
-    if not os.path.exists(eval_dir):
-        os.makedirs(eval_dir)
+    for folder in [src_dir, eval_dir]:
+        if not os.path.exists(folder): 
+            os.makedirs(folder) 
 
     #####################
     #   Data Loading    #
@@ -68,10 +71,11 @@ def main():
     TEXT = data.Field(tokenize=tokenize_en, init_token = BOS_WORD,
                      eos_token = EOS_WORD, pad_token=BLANK_WORD)
 
-    train = datasets.TranslationDataset(path=os.path.join(src_dir, 'lang8.train'),
-            exts=('.src', '.trg'), fields=(TEXT, TEXT))
-    val = datasets.TranslationDataset(path=os.path.join(src_dir, 'lang8.val'), 
-            exts=('.src', '.trg'), fields=(TEXT, TEXT))
+    train = datasets.TranslationDataset(path=os.path.join(src_dir, DATA),
+            exts=('.train.src', '.train.trg'), fields=(TEXT, TEXT))
+    val = datasets.TranslationDataset(path=os.path.join(src_dir, DATA), 
+            exts=('.val.src', '.val.trg'), fields=(TEXT, TEXT))
+
     train_iter = MyIterator(train, batch_size=BATCH_SIZE, device=device,
                             repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
                             batch_size_fn=batch_size_fn, train=True)
@@ -83,69 +87,70 @@ def main():
     print(train[random_idx].src)
     print(train[random_idx].trg)
 
+    ###############
+    #  Vocabuary  #
+    ###############
+    if os.path.exists(vocab_file):
+        TEXT.vocab = torch.load(vocab_file)
+    else:
+        if 'glove' in EMB:
+            TEXT.build_vocab(train.src, vectors=EMB)
+        else:
+            MIN_FREQ = 2
+            TEXT.build_vocab(train.src, min_freq=MIN_FREQ)
+        print("Save %s Vocabuary..." % (DATA))
+        torch.save(TEXT.vocab, vocab_file)
+        
+    pad_idx = TEXT.vocab.stoi["<blank>"]
+    print("Vocab size: ", len(TEXT.vocab))
+
     #####################
     #   Word Embedding  #
     #####################
+    data_generator, emb, EMB_DIM = build_pretrained(EMB, TEXT.vocab, device, 
+            elmo_options=elmo_options_file, elmo_weights=elmo_weights_file)
 
-    weights = None
-    # glove embedding
-    if 'glove' in EMB:
-        TEXT.build_vocab(train.src, vectors=EMB)
-        weights = TEXT.vocab.vectors
-        EMB_DIM = TEXT.vocab.vectors.shape[1]
-    # TODO elmo embedding
-    elif 'emlo' in EMB: pass
-    # TODO bert embedding
-    else:
-        MIN_FREQ = 2
-        TEXT.build_vocab(train.src, min_freq=MIN_FREQ)
-    print("Save Vocabuary...")
-    torch.save(TEXT.vocab, vocab_path)
-
-    # TODO torchtext load customized pretrained weights
     ##########################
     #   Training the System  #
     ##########################
-    model = make_model(len(TEXT.vocab), d_model=EMB_DIM, emb_weight=weights, N=6)
-    model.to(device)
+    model = make_model(len(TEXT.vocab), emb, d_model=EMB_DIM).to(device)
+    # if os.path.exists(model_file):
+        # model.load_state_dict(torch.load(model_file))
 
-    pad_idx = TEXT.vocab.stoi["<blank>"]
-    criterion = LabelSmoothing(size=len(TEXT.vocab), padding_idx=pad_idx, smoothing=0.1)
-    criterion.to(device)
+    criterion = LabelSmoothing(size=len(TEXT.vocab), padding_idx=pad_idx, smoothing=0.1).to(device)
 
-    model_opt = NoamOpt(model.src_embed[0].d_model, 1, 2000,
+    model_opt = NoamOpt(EMB_DIM, 1, 2000,
                         torch.optim.Adam(model.parameters(), lr=0, 
                         betas=(0.9, 0.98), eps=1e-9))
 
-    ### MULTIPLE GPU
-    model_par = nn.DataParallel(model, device_ids=devices)
+    print("Training %s %s ..." % (DATA, EMB))
+    ### SINGLE GPU
     for epoch in range(EPOCHES):
-        model_par.train()
-        run_epoch((rebatch(pad_idx, b) for b in train_iter), 
-                  model_par, 
-                  MultiGPULossCompute(model.generator, criterion, devices, opt=model_opt))
-        print("Model saved at", model_path)
-        torch.save(model.state_dict(), model_path)
+        model.train()
+        run_epoch(data_generator(train_iter), model, 
+                  SimpleLossCompute(model.generator, criterion, opt=model_opt),
+                  vocab=TEXT.vocab, emb=EMB)
+        print("Save Model...")
+        torch.save(model.state_dict(), model_file)
 
-        model_par.eval()
-        loss = run_epoch((rebatch(pad_idx, b) for b in valid_iter), 
-                          model_par, 
-                          MultiGPULossCompute(model.generator, criterion, devices, opt=None))
+        model.eval()
+        loss = run_epoch(data_generator(valid_iter), model, 
+                          SimpleLossCompute(model.generator, criterion, opt=None))
         print("Epoch %d/%d - Loss: %f" % (epoch + 1, EPOCHES, loss))
 
-    ### SINGLE GPU
+    ### MULTIPLE GPU
+    # model_par = nn.DataParallel(model, device_ids=devices)
     # for epoch in range(EPOCHES):
-        # model.train()
-        # run_epoch((rebatch(pad_idx, b) for b in train_iter), 
-                  # model, 
-                  # SimpleLossCompute(model.generator, criterion, opt=model_opt))
-        # torch.save([model.state_dict(), TEXT.vocab], model_path)
-        # print("Model saved at", model_path)
+        # model_par.train()
+        
+        # run_epoch(data_generator(train_iter), model_par, 
+                  # MultiGPULossCompute(model.generator, criterion, devices, opt=model_opt))
+        # print("Save Model...")
+        # torch.save(model.state_dict(), model_file)
 
-        # model.eval()
-        # loss = run_epoch((rebatch(pad_idx, b) for b in valid_iter), 
-                          # model, 
-                          # SimpleLossCompute(model.generator, criterion, opt=None))
+        # model_par.eval()
+        # loss = run_epoch(data_generator(valid_iter), model_par, 
+                         # MultiGPULossCompute(model.generator, criterion, devices, opt=None))
         # print("Epoch %d/%d - Loss: %f" % (epoch + 1, EPOCHES, loss))
 
 

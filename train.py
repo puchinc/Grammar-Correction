@@ -7,6 +7,15 @@
 #       -enc data/test/with_error_tag.encoder \
 #       -dec data/test/with_error_tag.decoder
 
+# [Seq2seq] https://pytorch.org/tutorials/intermediate/seq2seq_translation_tutorial.html
+# * torch
+
+        # pip install torch
+        # pip install torchvision
+        # pip install matplotlib
+        # pip install nltk
+        # pip install scipy
+
 from __future__ import unicode_literals, print_function, division
 from io import open
 import sys
