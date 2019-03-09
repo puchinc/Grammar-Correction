@@ -22,7 +22,7 @@ python parser/lang8_parser.py \
 awk -F $'\t' '{print $1}' data/src/lang8.txt > data/src/lang8.src 
 awk -F $'\t' '{print $2}' data/src/lang8.txt > data/src/lang8.trg
 cd data/src
-python ../../prepare_csv.py \
+python ../../parser/prepare_csv.py \
        -i lang8.src \
        -train lang8.train.src \
        -train_r 0.6 \
@@ -30,7 +30,7 @@ python ../../prepare_csv.py \
        -test_r 0.2 \
        -val lang8.val.src \
        -val_r 0.2
-python ../../prepare_csv.py \
+python ../../parser/prepare_csv.py \
        -i lang8.trg \
        -train lang8.train.trg \
        -train_r 0.6 \
@@ -67,6 +67,51 @@ wget -P data/embs/ https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x409
 * bert
         
         pip install pytorch-pretrained-bert
+
+## Fine tuning ELMo Model on new data
+[Tensorflow]
+* tf
+
+    pip install tensorflow tensorflow-gpu==1.2 h5py
+    python setup.py install
+    python -m unittest discover tests/
+
+[Elmo-Tutorial] https://github.com/PrashantRanjan09/Elmo-Tutorial
+[BiLM-TF] https://github.com/allenai/bilm-tf
+* tf
+    
+    wget -P data/embs/ https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway_tf_checkpoint/model.ckpt-935588.data-00000-of-00001
+    wget -P data/embs/ https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway_tf_checkpoint/model.ckpt-935588.index
+    wget -P data/embs/ https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway_tf_checkpoint/model.ckpt-935588.meta
+    wget -P data/embs/ https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway_tf_checkpoint/options.json
+
+    python parser/prepare_vocab.py
+
+    python bilm-tf/bin/dump_weights.py \
+        --save_dir data/embs \
+        --outfile data/embs/weights.hdf5
+
+    export CUDA_VISIBLE_DEVICES=2,3,4
+    python bilm-tf/bin/restart.py \
+            --train_prefix='data/src/lang8.train.*' \
+            --vocab_file=data/src/vocab-2016-09-10.txt \
+            --save_dir=data/embs \
+            --n_gpus=3 \
+            --batch_size=3000 \
+            --n_epochs=10
+
+python bilm-tf/bin/train_elmo.py \
+    --train_prefix='data/src/lang8.train.*' \
+    --vocab_file data/src/vocab-2016-09-10.txt \
+    --save_dir data/embs/
+
+export CUDA_VISIBLE_DEVICES=0,1,2
+python bilm-tf/bin/train_elmo_updated.py \
+    --train_prefix='data/src/lang8.train.*' \
+    --vocab_file=data/src/lang8.vocab.txt \
+    --save_dir=data/embs \
+    --restart_ckpt_file=data/embs/checkpoint
+
         
 ## Transformer Quickstart
 

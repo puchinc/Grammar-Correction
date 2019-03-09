@@ -35,7 +35,7 @@ def main():
     EOS_WORD = '</s>'
     BLANK_WORD = "<blank>"
 
-    DATA = 'aesw'
+    DATA = 'lang8_small'
     # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
     # EMB = 'bow'
     EMB = 'elmo'
@@ -75,6 +75,8 @@ def main():
     test_iter = MyIterator(test, batch_size=BATCH_SIZE, device=device,
                             repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
                             batch_size_fn=batch_size_fn, train=False)
+    # test_iter = data.Iterator(test, batch_size=BATCH_SIZE, device=device, 
+                              # sort=False, repeat=False, train=False)
 
     random_idx = random.randint(0, len(test) - 1)
     print(test[random_idx].src)
@@ -112,72 +114,69 @@ def main():
 
         src = Variable(src)
 
-        out = greedy_decode(model, src, src_mask, TEXT.vocab, emb=EMB, max_len=60)
-        for sen in out:
-            print("Translation:", ' '.join(sen).split('</s>')[0])
+        out = greedy_decode(model, TEXT.vocab, src, src_mask)
+        probs = model.generator(out)
+        _, s = torch.max(probs, dim = 1)
+        s = s.view(len(batch.src), -1) # transpose to batch * words
+        trans = [[vocab.itos[word] for word in words] for words in s]
+        print("Translation:", ' '.join(trans[0]).split('</s>')[0][:20])
 
-        # trans = "<s> "
+    sys.exit()
+
+    # f_src = open(os.path.join(eval_dir, 'lang8.eval.src'), 'w+')
+    # f_trg = open(os.path.join(eval_dir, 'lang8.eval.trg'), 'w+')
+    # f_pred = open(os.path.join(eval_dir, 'lang8.eval.pred'), 'w+')
+
+    # for i, batch in enumerate(test_iter):
+        # # source
+        # source = ""
+        # for i in range(1, batch.src.size(0)):
+            # sym = TEXT.vocab.itos[batch.src.data[i, 0]]
+            # print("Batch.src.data ", batch.src.data, batch.src.data[i, 0])
+            # if sym == "</s>": break
+            # source += sym + " "
+        # source += '\n'
+        # if '<unk>' in source: continue
+
+        # # target 
+        # target = ""
+        # for i in range(1, batch.trg.size(0)):
+            # sym = TEXT.vocab.itos[batch.trg.data[i, 0]]
+            # if sym == "</s>": break
+            # target += sym + " "
+        # target += '\n'
+        # if '<unk>' in target: continue
+
+        # # translation 
+        # src_mask = (src != TEXT.vocab.stoi["<blank>"]).unsqueeze(-2)
+
+        # if 'elmo' in EMB:
+            # sentences = []
+            # for i in range(len(src)):
+                # sentences.append([TEXT.vocab.itos[id.item()] for id in src[i]])
+            # src = batch_to_ids(sentences).to(device)
+            # print(sentences)
+        # print(src.shape, src_mask.shape)
+
+        # out = greedy_decode(model, src, src_mask, 
+                            # max_len=60, start_symbol=TEXT.vocab.stoi["<s>"])
+        # pred = ""
         # for i in range(1, out.size(1)):
             # sym = TEXT.vocab.itos[out[0, i]]
             # if sym == "</s>": break
-            # trans += sym + " "
-        # print(trans)
-    sys.exit()
+            # pred += sym + " "
+        # pred += '\n'
 
-    f_src = open(os.path.join(eval_dir, 'lang8.eval.src'), 'w+')
-    f_trg = open(os.path.join(eval_dir, 'lang8.eval.trg'), 'w+')
-    f_pred = open(os.path.join(eval_dir, 'lang8.eval.pred'), 'w+')
+        # print("Source:", source, end='')
+        # print("Target:", target, end='')
+        # print("Translation:", pred)
+        # f_src.write(source)
+        # f_trg.write(target)
+        # f_pred.write(pred)
 
-    for i, batch in enumerate(test_iter):
-        # source
-        source = ""
-        for i in range(1, batch.src.size(0)):
-            sym = TEXT.vocab.itos[batch.src.data[i, 0]]
-            print("Batch.src.data ", batch.src.data, batch.src.data[i, 0])
-            if sym == "</s>": break
-            source += sym + " "
-        source += '\n'
-        if '<unk>' in source: continue
-
-        # target 
-        target = ""
-        for i in range(1, batch.trg.size(0)):
-            sym = TEXT.vocab.itos[batch.trg.data[i, 0]]
-            if sym == "</s>": break
-            target += sym + " "
-        target += '\n'
-        if '<unk>' in target: continue
-
-        # translation 
-        src_mask = (src != TEXT.vocab.stoi["<blank>"]).unsqueeze(-2)
-
-        if 'elmo' in EMB:
-            sentences = []
-            for i in range(len(src)):
-                sentences.append([TEXT.vocab.itos[id.item()] for id in src[i]])
-            src = batch_to_ids(sentences).to(device)
-            print(sentences)
-        print(src.shape, src_mask.shape)
-
-        out = greedy_decode(model, src, src_mask, 
-                            max_len=60, start_symbol=TEXT.vocab.stoi["<s>"])
-        pred = ""
-        for i in range(1, out.size(1)):
-            sym = TEXT.vocab.itos[out[0, i]]
-            if sym == "</s>": break
-            pred += sym + " "
-        pred += '\n'
-
-        print("Source:", source, end='')
-        print("Target:", target, end='')
-        print("Translation:", pred)
-        f_src.write(source)
-        f_trg.write(target)
-        f_pred.write(pred)
-
-    f_src.close()
-    f_trg.close()
-    f_pred.close()
+    # f_src.close()
+    # f_trg.close()
+    # f_pred.close()
 
 if __name__ == "__main__":
     main()

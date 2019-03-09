@@ -34,13 +34,13 @@ def main():
     EOS_WORD = '</s>'
     BLANK_WORD = "<blank>"
 
-    DATA = 'aesw'
+    DATA = 'lang8_small'
     # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
     EMB = 'bow'
-    # EMB = 'elmo'
+    EMB = 'elmo'
     # EMB = 'glove.6B.200d'
     EMB_DIM = 512
-    BATCH_SIZE = 500
+    BATCH_SIZE = 50
     EPOCHES = 3
 
     # GPU to use
@@ -129,13 +129,14 @@ def main():
         model.train()
         run_epoch(data_generator(train_iter), model, 
                   SimpleLossCompute(model.generator, criterion, opt=model_opt),
-                  vocab=TEXT.vocab, emb=EMB)
+                  vocab=TEXT.vocab)
         print("Save Model...")
         torch.save(model.state_dict(), model_file)
 
         model.eval()
         loss = run_epoch(data_generator(valid_iter), model, 
-                          SimpleLossCompute(model.generator, criterion, opt=None))
+                         SimpleLossCompute(model.generator, criterion, opt=None),
+                         vocab=TEXT.vocab)
         print("Epoch %d/%d - Loss: %f" % (epoch + 1, EPOCHES, loss))
 
     ### MULTIPLE GPU
