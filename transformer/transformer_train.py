@@ -34,9 +34,9 @@ def main():
     EOS_WORD = '</s>'
     BLANK_WORD = "<blank>"
 
-    DATA = 'lang8_small'
+    DATA = 'lang8'
     # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
-    EMB = 'bow'
+    # EMB = 'bow'
     EMB = 'elmo'
     # EMB = 'glove.6B.200d'
     EMB_DIM = 512

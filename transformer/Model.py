@@ -547,7 +547,12 @@ def greedy_decode(model, vocab, src, src_mask, trg=None,
 
     memory = model.encode(src, src_mask)
     for i in range(decode_len):
+        # if train, use trg; if pred, use ys
         ys = trg[:, :i + 1] if trg is not None else ys
+        # print("Decoding memory src_mask, ys, ys_mask: ", 
+                # memory.shape, src_mask.shape, Variable(ys).shape, 
+                # Variable(subsequent_mask(ys.size(1)).type_as(src.data)).shape)
+
         out = model.decode(memory, src_mask, Variable(ys), 
                 Variable(subsequent_mask(ys.size(1)).type_as(src.data)))
 

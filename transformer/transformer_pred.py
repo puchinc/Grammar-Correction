@@ -37,7 +37,7 @@ def main():
 
     DATA = 'lang8_small'
     # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
-    # EMB = 'bow'
+    EMB = 'bow'
     EMB = 'elmo'
     # EMB = 'glove.6B.200d'
     EMB_DIM = 512
@@ -101,24 +101,31 @@ def main():
     model.load_state_dict(torch.load(model_file))
     model.eval()
 
+    def wtoc(batch_words):
+        sents = [[TEXT.vocab.itos[i] for i in words] for words in batch_words]
+        return batch_to_ids(sents)
+
+    print("Predicting %s %s ..." % (DATA, EMB))
     for batch in test_iter:
         src = batch.src.transpose(0, 1)
         src_mask = (src != TEXT.vocab.stoi["<blank>"]).unsqueeze(-2)
         batch_size = len(src)
 
+        get_ys = lambda x: torch.cuda.LongTensor(x)
         if 'elmo' in EMB:
             sen = []
             for i in range(batch_size):
                 sen.append([TEXT.vocab.itos[id.item()] for id in src[i]])
             src = batch_to_ids(sen).type_as(src.data)
+            get_ys = wtoc 
 
         src = Variable(src)
 
-        out = greedy_decode(model, TEXT.vocab, src, src_mask)
+        out = greedy_decode(model, TEXT.vocab, src, src_mask, get_ys=get_ys)
+        # print("SRC OUT: ", src.shape, out.shape)
         probs = model.generator(out)
         _, s = torch.max(probs, dim = 1)
-        s = s.view(len(batch.src), -1) # transpose to batch * words
-        trans = [[vocab.itos[word] for word in words] for words in s]
+        trans = [[TEXT.vocab.itos[word] for word in words] for words in s]
         print("Translation:", ' '.join(trans[0]).split('</s>')[0][:20])
 
     sys.exit()
