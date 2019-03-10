@@ -100,17 +100,17 @@ wget -P data/embs/ https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x409
             --batch_size=3000 \
             --n_epochs=10
 
-python bilm-tf/bin/train_elmo.py \
-    --train_prefix='data/src/lang8.train.*' \
-    --vocab_file data/src/vocab-2016-09-10.txt \
-    --save_dir data/embs/
+<!--python bilm-tf/bin/train_elmo.py \-->
+    <!----train_prefix='data/src/lang8.train.*' \-->
+    <!----vocab_file data/src/vocab-2016-09-10.txt \-->
+    <!----save_dir data/embs/-->
 
-export CUDA_VISIBLE_DEVICES=0,1,2
-python bilm-tf/bin/train_elmo_updated.py \
-    --train_prefix='data/src/lang8.train.*' \
-    --vocab_file=data/src/lang8.vocab.txt \
-    --save_dir=data/embs \
-    --restart_ckpt_file=data/embs/checkpoint
+<!--export CUDA_VISIBLE_DEVICES=0,1,2-->
+<!--python bilm-tf/bin/train_elmo_updated.py \-->
+    <!----train_prefix='data/src/lang8.train.*' \-->
+    <!----vocab_file=data/src/lang8.vocab.txt \-->
+    <!----save_dir=data/embs \-->
+    <!----restart_ckpt_file=data/embs/checkpoint-->
 
         
 ## Transformer Quickstart

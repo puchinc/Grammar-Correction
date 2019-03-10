@@ -287,79 +287,22 @@ def make_model(vocab_size, emb, d_model=512, N=6, d_ff=2048, h=8, dropout=0.1):
 #     TRAINING       #
 ######################
 
-""" Batches and Masking """
-class Batch:
-    "Object for holding a batch of data with mask during training."
-    # Maybe it is the norm that should be blamed, I solved this by fixing the Batch class,
-    # self.ntokens = (self.trg_y != pad).data.sum()
-    # -> self.ntokens = (self.trg_y != pad).data.sum().item()
-    # for (self.trg_y != pad).data.sum() is a tensor.
-    def __init__(self, src, trg=None, pad=0):
-        self.src = src
-        self.src_mask = (src != pad).unsqueeze(-2)
-        if trg is not None:
-            self.trg = trg[:, :-1]
-            self.trg_y = trg[:, 1:]
-            self.trg_mask = self.make_std_mask(self.trg, pad)
-            self.ntokens = (self.trg_y != pad).data.sum().item()
-    
-    @staticmethod
-    def make_std_mask(tgt, pad):
-        "Create a mask to hide padding and future words."
-        tgt_mask = (tgt != pad).unsqueeze(-2)
-        tgt_mask = tgt_mask & Variable(
-            subsequent_mask(tgt.size(-1)).type_as(tgt_mask.data))
-        return tgt_mask
-
-class Elmo_Batch:
-    "Object for holding a batch of data with mask during training."
-    def __init__(self, src, src_y, trg=None, trg_y=None, pad=0):
-        self.src = src
-        self.src_mask = (src_y != pad).unsqueeze(-2)
-        if trg is not None:
-            self.trg = trg
-            self.trg_y = trg_y
-            self.trg_mask = self.make_std_mask(trg_y, pad)
-            self.ntokens = (self.trg_y != pad).data.sum().item()
-    
-    @staticmethod
-    def make_std_mask(tgt, pad):
-        "Create a mask to hide padding and future words."
-        tgt_mask = (tgt != pad).unsqueeze(-2)
-        tgt_mask = tgt_mask & Variable(
-            subsequent_mask(tgt.size(-1)).type_as(tgt_mask.data))
-        return tgt_mask
-
 """ Training Loop """
 
-def run_epoch(data_iter, model, loss_compute, vocab):
-    # batch_words = batch * words * 50
-    def wtoc(batch_words):
-        sents = [[vocab.itos[i] for i in words] for words in batch_words]
-        return batch_to_ids(sents)
-    
+def run_epoch(data_iter, model, loss_compute, vocab, model_file=None):
     "Standard Training and Logging Function"
     start = time.time()
     total_tokens = 0
     total_loss = 0
     tokens = 0
-    # change batch.ntokens to batch.ntokens.float().item() 
-    # due to pytorch new version. do the same thing for norm
+
     for i, batch in enumerate(data_iter):
-        # out = model.forward(batch.src, batch.trg,
-                            # batch.src_mask, batch.trg_mask)
         # print("Run Epoche SRC v.s. TRG: ", batch.src.shape, batch.src_mask.shape, batch.trg.shape, batch.trg_mask.shape, batch.trg_y.shape)
-        # out = model(batch.src, batch.trg, batch.src_mask, batch.trg_mask)
 
-        is_elmo = len(batch.src.shape) == 3
-        get_ys = wtoc if is_elmo else lambda x: torch.cuda.LongTensor(x)
-
-        # out = model(batch.src, batch.trg, batch.src_mask, batch.trg_mask)
-        # loss = loss_compute(out, batch.trg_y, batch.ntokens)
-        # print("Model: ", out)
-        out = greedy_decode(model, vocab, batch.src, batch.src_mask, 
-                            trg=batch.trg, get_ys=get_ys, max_len=60)
-        # print("Greedy Decode: ", out)
+        if len(batch.src.shape) == 3:
+            out = greedy_decode(model, vocab, batch.src, batch.src_mask, trg=batch.trg)
+        else:
+            out = model(batch.src, batch.trg, batch.src_mask, batch.trg_mask)
 
         loss = loss_compute(out, batch.trg_y, batch.ntokens)
         total_loss += loss
@@ -372,14 +315,19 @@ def run_epoch(data_iter, model, loss_compute, vocab):
             start = time.time()
             tokens = 0
             
-            # evaluate translation quality
-            probs = model.generator(out)
-            _, s = torch.max(probs, dim = 1)
-            s = s.view(len(batch.src), -1) # transpose to batch * words
-            trans = [[vocab.itos[word] for word in words] for words in s]
-            print("Translation:", ' '.join(random.choice(trans)).split('</s>')[0][:20])
+            if model_file:
+                print("Save Model...")
+                torch.save(model.state_dict(), model_file)
 
-    return total_loss / total_tokens
+            # evaluate translation quality
+            out = greedy_decode(model, vocab, batch.src, batch.src_mask)
+            probs = model.generator(out)
+            _, s = torch.max(probs, dim = -1) # batch * words
+            trans = [[vocab.itos[w] for w in words] for words in s]
+            print("Translation:", ' '.join(random.choice(trans)).split('</s>')[0][:50])
+
+    # avoid zero division error
+    return total_loss / total_tokens if total_tokens else 0
 
 """ Training Data and Batching """
 global max_src_in_batch, max_tgt_in_batch
@@ -537,13 +485,18 @@ class MultiGPULossCompute:
             self.opt.optimizer.zero_grad()
         return total * normalize
 
-def greedy_decode(model, vocab, src, src_mask, trg=None,
-        get_ys=lambda x: torch.cuda.LongTensor(x), max_len=60):
-
-    sents = [[vocab.stoi["<s>"]] for _ in range(len(src))]
-    ys = get_ys(sents).type_as(src.data)
+def greedy_decode(model, vocab, src, src_mask, trg=None, max_len=60):
+    def get_ys(batch_words):
+        # ELMo char_ids input = batch * words * 50
+        if len(src.shape) == 3:
+            sents = [[vocab.itos[i] for i in words] for words in batch_words]
+            return batch_to_ids(sents)
+        # Glove word_ids input = batch * words
+        return torch.cuda.LongTensor(batch_words)
 
     decode_len = max_len if trg is None else trg.size(1)
+    sents = [[vocab.stoi["<s>"]] for _ in range(len(src))]
+    ys = get_ys(sents).type_as(src.data)
 
     memory = model.encode(src, src_mask)
     for i in range(decode_len):
@@ -558,8 +511,8 @@ def greedy_decode(model, vocab, src, src_mask, trg=None,
 
         # get last word of whole representation
         prob = model.generator(out[:, -1])
-        _, next_words = torch.max(prob, dim = 1)
-        next_words = next_words.view(-1, 1) # transpose to batch * words
+        _, next_words = torch.max(prob, dim = -1) # batch
+        next_words = next_words.view(-1, 1) # transpose to batch * word
 
         ys = torch.cat([ys, get_ys(next_words).type_as(src.data)], dim=1)
     # print("Out trg shape: ", out.shape, trg.shape)
@@ -587,23 +540,69 @@ class MyIterator(data.Iterator):
                                           self.batch_size_fn):
                 self.batches.append(sorted(b, key=self.sort_key))
 
+""" Batches and Masking """
+class Batch:
+    "Object for holding a batch of data with mask during training."
+    # Maybe it is the norm that should be blamed, I solved this by fixing the Batch class,
+    # self.ntokens = (self.trg_y != pad).data.sum()
+    # -> self.ntokens = (self.trg_y != pad).data.sum().item()
+    # for (self.trg_y != pad).data.sum() is a tensor.
+    def __init__(self, src, trg=None, pad=0):
+        self.src = src
+        self.src_mask = (src != pad).unsqueeze(-2)
+        if trg is not None:
+            self.trg = trg[:, :-1]
+            self.trg_y = trg[:, 1:]
+            self.trg_mask = self.make_std_mask(self.trg, pad)
+            self.ntokens = (self.trg_y != pad).data.sum().item()
+    
+    @staticmethod
+    def make_std_mask(tgt, pad):
+        "Create a mask to hide padding and future words."
+        tgt_mask = (tgt != pad).unsqueeze(-2)
+        tgt_mask = tgt_mask & Variable(
+            subsequent_mask(tgt.size(-1)).type_as(tgt_mask.data))
+        return tgt_mask
+
+class Elmo_Batch:
+    "Object for holding a batch of data with mask during training."
+    def __init__(self, src, src_y, trg=None, trg_y=None, pad=0):
+        self.src = src
+        self.src_mask = (src_y != pad).unsqueeze(-2)
+        if trg is not None:
+            self.trg = trg
+            self.trg_y = trg_y
+            self.trg_mask = self.make_std_mask(trg_y, pad)
+            self.ntokens = (self.trg_y != pad).data.sum().item()
+    
+    @staticmethod
+    def make_std_mask(tgt, pad):
+        "Create a mask to hide padding and future words."
+        tgt_mask = (tgt != pad).unsqueeze(-2)
+        tgt_mask = tgt_mask & Variable(
+            subsequent_mask(tgt.size(-1)).type_as(tgt_mask.data))
+        return tgt_mask
+
 def rebatch(pad_idx, batch):
     "Fix order in torchtext to match ours"
     src, trg = batch.src.transpose(0, 1), batch.trg.transpose(0, 1)
     return Batch(src, trg, pad_idx)
 
-def elmo_rebatch(pad_idx, batch, vocab, device):
+def elmo_rebatch(pad_idx, batch, vocab):
     "Fix order in torchtext to match ours"
+    # print("Elmo Rebatch: ", batch.src.shape)
     src, trg = [], []
     # remove src </s> and trg <s>
-    src_y, trg_y = batch.src.transpose(0, 1)[:, :-1], batch.trg.transpose(0, 1)[:, 1:]
+    # src_y, trg_y = batch.src.transpose(0, 1)[:, :-1], batch.trg.transpose(0, 1)[:, 1:]
+    src_y, trg_y = batch.src.transpose(0, 1), batch.trg.transpose(0, 1)
 
     for i in range(len(batch)):
         src.append([vocab.itos[id.item()] for id in src_y[i]])
         trg.append([vocab.itos[id.item()] for id in trg_y[i]])
 
-    src, trg = batch_to_ids(src).to(device), batch_to_ids(trg).to(device)
+    src, trg = batch_to_ids(src).type_as(src_y), batch_to_ids(trg).type_as(trg_y)
 
+    # print("Elmo Rebatch src: ", src.shape)
     return Elmo_Batch(src, src_y, trg, trg_y, pad_idx)
 
 #####################
@@ -625,11 +624,11 @@ def build_pretrained(emb_name, vocab, device, elmo_options=options_file, elmo_we
         elmo = Elmo(elmo_options, elmo_weights, 1, dropout=0).to(device)
 
         emb_dim = 1024
-        data_generator = lambda data: (elmo_rebatch(pad_idx, b, vocab, device) for b in data)
+        data_generator = lambda data: (elmo_rebatch(pad_idx, b, vocab) for b in data)
         emb = lambda char_ids: elmo(char_ids)['elmo_representations'][0]
 
     # TODO bert embedding
-    elif 'bert' in emb_name: pass
+    # elif 'bert' in emb_name: pass
     else:
         data_generator = lambda data: (rebatch(pad_idx, b) for b in data)
         emb = nn.Embedding(len(vocab), emb_dim)

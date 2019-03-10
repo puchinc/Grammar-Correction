@@ -26,21 +26,21 @@ import os
 import sys
 import random
 
-from Model import MyIterator, LabelSmoothing, NoamOpt, MultiGPULossCompute, SimpleLossCompute, Batch, Elmo_Batch
-from Model import make_model, run_epoch, rebatch, batch_size_fn, elmo_rebatch, build_pretrained
+from Model import MyIterator, LabelSmoothing, NoamOpt, MultiGPULossCompute, SimpleLossCompute
+from Model import make_model, rebatch, run_epoch, batch_size_fn, build_pretrained, greedy_decode
 
 def main():
     BOS_WORD = '<s>'
     EOS_WORD = '</s>'
     BLANK_WORD = "<blank>"
 
-    DATA = 'lang8'
+    DATA = 'lang8_small'
     # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
     # EMB = 'bow'
-    EMB = 'elmo'
-    # EMB = 'glove.6B.200d'
+    # EMB = 'elmo'
+    EMB = 'glove.6B.200d'
     EMB_DIM = 512
-    BATCH_SIZE = 50
+    BATCH_SIZE = 256
     EPOCHES = 3
 
     # GPU to use
@@ -90,16 +90,16 @@ def main():
     ###############
     #  Vocabuary  #
     ###############
-    if os.path.exists(vocab_file):
-        TEXT.vocab = torch.load(vocab_file)
+    # if os.path.exists(vocab_file):
+        # TEXT.vocab = torch.load(vocab_file)
+    # else:
+    if 'glove' in EMB:
+        TEXT.build_vocab(train.src, vectors=EMB)
     else:
-        if 'glove' in EMB:
-            TEXT.build_vocab(train.src, vectors=EMB)
-        else:
-            MIN_FREQ = 2
-            TEXT.build_vocab(train.src, min_freq=MIN_FREQ)
-        print("Save %s Vocabuary..." % (DATA))
-        torch.save(TEXT.vocab, vocab_file)
+        MIN_FREQ = 2
+        TEXT.build_vocab(train.src, min_freq=MIN_FREQ)
+    print("Save %s Vocabuary..." % (DATA))
+    torch.save(TEXT.vocab, vocab_file)
         
     pad_idx = TEXT.vocab.stoi["<blank>"]
     print("Vocab size: ", len(TEXT.vocab))
@@ -127,17 +127,18 @@ def main():
     ### SINGLE GPU
     for epoch in range(EPOCHES):
         model.train()
-        run_epoch(data_generator(train_iter), model, 
-                  SimpleLossCompute(model.generator, criterion, opt=model_opt),
-                  vocab=TEXT.vocab)
-        print("Save Model...")
-        torch.save(model.state_dict(), model_file)
+        loss_compute = SimpleLossCompute(model.generator, criterion, opt=model_opt)
+        run_epoch(data_generator(train_iter), model, loss_compute, 
+                  TEXT.vocab, model_file=model_file)
 
         model.eval()
-        loss = run_epoch(data_generator(valid_iter), model, 
-                         SimpleLossCompute(model.generator, criterion, opt=None),
-                         vocab=TEXT.vocab)
-        print("Epoch %d/%d - Loss: %f" % (epoch + 1, EPOCHES, loss))
+        total_loss, total_tokens = 0, 0
+        for batch in data_generator(valid_iter):
+            out = greedy_decode(model, TEXT.vocab, batch.src, batch.src_mask, trg=batch.trg)
+            loss = loss_compute(out, batch.trg_y, batch.ntokens)
+            total_loss += loss
+            total_tokens += batch.ntokens
+        print("Epoch %d/%d - Loss: %f" % (epoch + 1, EPOCHES, total_loss / total_tokens))
 
     ### MULTIPLE GPU
     # model_par = nn.DataParallel(model, device_ids=devices)

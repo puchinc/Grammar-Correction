@@ -35,13 +35,13 @@ def main():
     EOS_WORD = '</s>'
     BLANK_WORD = "<blank>"
 
-    DATA = 'lang8_small'
+    DATA = 'lang8'
     # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
     EMB = 'bow'
-    EMB = 'elmo'
+    # EMB = 'elmo'
     # EMB = 'glove.6B.200d'
     EMB_DIM = 512
-    BATCH_SIZE = 250
+    BATCH_SIZE = 30
 
     # GPU to use
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -72,11 +72,11 @@ def main():
 
     test = datasets.TranslationDataset(path=os.path.join(src_dir, DATA), 
             exts=('.test.src', '.test.trg'), fields=(TEXT, TEXT))
-    test_iter = MyIterator(test, batch_size=BATCH_SIZE, device=device,
-                            repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
-                            batch_size_fn=batch_size_fn, train=False)
-    # test_iter = data.Iterator(test, batch_size=BATCH_SIZE, device=device, 
-                              # sort=False, repeat=False, train=False)
+    # test_iter = MyIterator(test, batch_size=BATCH_SIZE, device=device,
+                            # repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
+                            # batch_size_fn=batch_size_fn, train=False)
+    test_iter = data.Iterator(test, batch_size=BATCH_SIZE, device=device, 
+                              sort=False, repeat=False, train=False)
 
     random_idx = random.randint(0, len(test) - 1)
     print(test[random_idx].src)
@@ -101,32 +101,32 @@ def main():
     model.load_state_dict(torch.load(model_file))
     model.eval()
 
-    def wtoc(batch_words):
-        sents = [[TEXT.vocab.itos[i] for i in words] for words in batch_words]
-        return batch_to_ids(sents)
-
     print("Predicting %s %s ..." % (DATA, EMB))
     for batch in test_iter:
-        src = batch.src.transpose(0, 1)
+        src = batch.src = batch.src.transpose(0, 1)
+        batch.trg = batch.trg.transpose(0, 1)
         src_mask = (src != TEXT.vocab.stoi["<blank>"]).unsqueeze(-2)
         batch_size = len(src)
 
-        get_ys = lambda x: torch.cuda.LongTensor(x)
         if 'elmo' in EMB:
             sen = []
             for i in range(batch_size):
                 sen.append([TEXT.vocab.itos[id.item()] for id in src[i]])
             src = batch_to_ids(sen).type_as(src.data)
-            get_ys = wtoc 
 
         src = Variable(src)
 
-        out = greedy_decode(model, TEXT.vocab, src, src_mask, get_ys=get_ys)
+        out = greedy_decode(model, TEXT.vocab, src, src_mask)
         # print("SRC OUT: ", src.shape, out.shape)
         probs = model.generator(out)
-        _, s = torch.max(probs, dim = 1)
+        _, s = torch.max(probs, dim = -1)
         trans = [[TEXT.vocab.itos[word] for word in words] for words in s]
-        print("Translation:", ' '.join(trans[0]).split('</s>')[0][:20])
+        source = [[TEXT.vocab.itos[word] for word in words] for words in batch.src]
+        target = [[TEXT.vocab.itos[word] for word in words] for words in batch.trg]
+        print("Source:", ' '.join(source[0]).split('</s>')[0])
+        print("Target:", ' '.join(target[0]).split('</s>')[0])
+        print("Translation:", ' '.join(trans[0]).split('</s>')[0])
+        print()
 
     sys.exit()
 
