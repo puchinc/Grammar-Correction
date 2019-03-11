@@ -41,11 +41,11 @@ def main():
     SEQ_TRAIN = False
     # EN_EMB, DE_EMB, EMB_DIM = 'basic', 'basic', 512
     # EN_EMB, DE_EMB, EMB_DIM = 'glove', 'basic', 200
-    EN_EMB, DE_EMB, EMB_DIM = 'glove', 'glove', 200
+    # EN_EMB, DE_EMB, EMB_DIM = 'glove', 'glove', 200
     # EN_EMB, DE_EMB, EMB_DIM, SEQ_TRAIN = 'elmo', 'basic', 1024, True
-    # EN_EMB, DE_EMB, EMB_DIM, SEQ_TRAIN = 'elmo', 'elmo', 1024, True
+    EN_EMB, DE_EMB, EMB_DIM, SEQ_TRAIN = 'elmo', 'elmo', 1024, True
 
-    BATCH_SIZE = 500
+    BATCH_SIZE = 200
     EPOCHES = 100
 
     # GPU to use
