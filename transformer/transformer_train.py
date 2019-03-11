@@ -26,21 +26,26 @@ import os
 import sys
 import random
 
-from Model import MyIterator, LabelSmoothing, NoamOpt, MultiGPULossCompute, SimpleLossCompute, Batch, Elmo_Batch
-from Model import make_model, run_epoch, rebatch, batch_size_fn, elmo_rebatch, build_pretrained
+from Model import MyIterator, LabelSmoothing, NoamOpt, MultiGPULossCompute, SimpleLossCompute
+from Model import make_model, rebatch, run_epoch, batch_size_fn, get_emb, greedy_decode
 
 def main():
     BOS_WORD = '<s>'
     EOS_WORD = '</s>'
     BLANK_WORD = "<blank>"
+    MIN_FREQ = 2
 
-    DATA = 'aesw'
+    DATA = 'lang8_small'
+
     # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
-    EMB = 'bow'
-    # EMB = 'elmo'
-    # EMB = 'glove.6B.200d'
-    EMB_DIM = 512
-    BATCH_SIZE = 500
+    SEQ_TRAIN = False
+    # EN_EMB, DE_EMB, EMB_DIM = 'basic', 'basic', 512
+    # EN_EMB, DE_EMB, EMB_DIM = 'glove', 'basic', 200
+    # EN_EMB, DE_EMB, EMB_DIM = 'glove', 'glove', 200
+    EN_EMB, DE_EMB, EMB_DIM, SEQ_TRAIN = 'elmo', 'basic', 1024, True
+    # EN_EMB, DE_EMB, EMB_DIM, SEQ_TRAIN = 'elmo', 'elmo', 1024, True
+
+    BATCH_SIZE = 512
     EPOCHES = 3
 
     # GPU to use
@@ -52,10 +57,13 @@ def main():
     src_dir = os.path.join(root_dir, 'data/src')
     test_dir = os.path.join(root_dir, 'data/test')
     eval_dir = os.path.join(root_dir, 'data/eval')
+    vocab_file = os.path.join(root_dir, 'data/models', '%s.vocab' % (DATA))
+    # if 'glove' in [EN_EMB, DE_EMB]:
+        # vocab_file = os.path.join(root_dir, 'data/models', '%s.glove.vocab' % (DATA))
+
     elmo_options_file = os.path.join(root_dir, 'data/embs/elmo.json')
     elmo_weights_file = os.path.join(root_dir, 'data/embs/elmo.hdf5')
-    model_file = os.path.join(root_dir, 'data/models', '%s.%s.transformer.pt' % (DATA, EMB))
-    vocab_file = os.path.join(root_dir, 'data/models', '%s.vocab' % (DATA))
+    model_file = os.path.join(root_dir, 'data/models', '%s.%s.%s.transformer.pt' % (DATA, EN_EMB, DE_EMB))
 
     for folder in [src_dir, eval_dir]:
         if not os.path.exists(folder): 
@@ -90,30 +98,31 @@ def main():
     ###############
     #  Vocabuary  #
     ###############
-    if os.path.exists(vocab_file):
-        TEXT.vocab = torch.load(vocab_file)
+    # if os.path.exists(vocab_file):
+        # TEXT.vocab = torch.load(vocab_file)
+    # else:
+    if 'glove' in [EN_EMB, DE_EMB]:
+        TEXT.build_vocab(train.src, min_freq=MIN_FREQ, vectors='glove.6B.200d')
     else:
-        if 'glove' in EMB:
-            TEXT.build_vocab(train.src, vectors=EMB)
-        else:
-            MIN_FREQ = 2
-            TEXT.build_vocab(train.src, min_freq=MIN_FREQ)
-        print("Save %s Vocabuary..." % (DATA))
-        torch.save(TEXT.vocab, vocab_file)
-        
+        TEXT.build_vocab(train.src, min_freq=MIN_FREQ)
     pad_idx = TEXT.vocab.stoi["<blank>"]
-    print("Vocab size: ", len(TEXT.vocab))
+
+    print("Save %s vocabuary; vocab size = %d" % (DATA, len(TEXT.vocab)))
+    torch.save(TEXT.vocab, vocab_file)
 
     #####################
     #   Word Embedding  #
     #####################
-    data_generator, emb, EMB_DIM = build_pretrained(EMB, TEXT.vocab, device, 
-            elmo_options=elmo_options_file, elmo_weights=elmo_weights_file)
+    encoder_emb, decoder_emb = get_emb(EN_EMB, DE_EMB, TEXT.vocab, device, 
+                                       d_model=EMB_DIM,
+                                       elmo_options=elmo_options_file, 
+                                       elmo_weights=elmo_weights_file)
 
     ##########################
     #   Training the System  #
     ##########################
-    model = make_model(len(TEXT.vocab), emb, d_model=EMB_DIM).to(device)
+    model = make_model(len(TEXT.vocab), encoder_emb, decoder_emb, 
+                       d_model=EMB_DIM).to(device)
     # if os.path.exists(model_file):
         # model.load_state_dict(torch.load(model_file))
 
@@ -123,20 +132,25 @@ def main():
                         torch.optim.Adam(model.parameters(), lr=0, 
                         betas=(0.9, 0.98), eps=1e-9))
 
-    print("Training %s %s ..." % (DATA, EMB))
+    print("Training %s %s %s..." % (DATA, EN_EMB, DE_EMB))
     ### SINGLE GPU
     for epoch in range(EPOCHES):
         model.train()
-        run_epoch(data_generator(train_iter), model, 
-                  SimpleLossCompute(model.generator, criterion, opt=model_opt),
-                  vocab=TEXT.vocab, emb=EMB)
-        print("Save Model...")
-        torch.save(model.state_dict(), model_file)
+        loss_compute = SimpleLossCompute(model.generator, criterion, opt=model_opt)
+        # run_epoch(data_generator(train_iter), model, loss_compute, 
+        run_epoch((rebatch(pad_idx, b) for b in train_iter), 
+                  model, loss_compute, TEXT.vocab, 
+                  model_file=model_file, seq_train=SEQ_TRAIN)
 
         model.eval()
-        loss = run_epoch(data_generator(valid_iter), model, 
-                          SimpleLossCompute(model.generator, criterion, opt=None))
-        print("Epoch %d/%d - Loss: %f" % (epoch + 1, EPOCHES, loss))
+        total_loss, total_tokens = 0, 0
+        for batch in (rebatch(pad_idx, b) for b in valid_iter):
+            out = greedy_decode(model, TEXT.vocab, batch.src, batch.src_mask, trg=batch.trg)
+            loss = loss_compute(out, batch.trg_y, batch.ntokens)
+            total_loss += loss
+            total_tokens += batch.ntokens
+            break
+        print("Epoch %d/%d - Loss: %f" % (epoch + 1, EPOCHES, total_loss / total_tokens))
 
     ### MULTIPLE GPU
     # model_par = nn.DataParallel(model, device_ids=devices)

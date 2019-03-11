@@ -261,7 +261,8 @@ class PositionalEncoding(nn.Module):
 #      Full Model      #
 ########################
 
-def make_model(vocab_size, emb, d_model=512, N=6, d_ff=2048, h=8, dropout=0.1):
+def make_model(vocab_size, encoder_emb, decoder_emb,
+               d_model=512, N=6, d_ff=2048, h=8, dropout=0.1):
     "Helper: Construct a model from hyperparameters."
     src_vocab = trg_vocab = vocab_size
     c = copy.deepcopy
@@ -272,8 +273,8 @@ def make_model(vocab_size, emb, d_model=512, N=6, d_ff=2048, h=8, dropout=0.1):
         Encoder(EncoderLayer(d_model, c(attn), c(ff), dropout), N),
         Decoder(DecoderLayer(d_model, c(attn), c(attn), 
                              c(ff), dropout), N),
-        nn.Sequential(Embeddings(emb, d_model), c(position)),
-        nn.Sequential(Embeddings(emb, d_model), c(position)),
+        nn.Sequential(Embeddings(encoder_emb, d_model), c(position)),
+        nn.Sequential(Embeddings(decoder_emb, d_model), c(position)),
         Generator(d_model, trg_vocab))
     
     # This was important from their code. 
@@ -287,64 +288,59 @@ def make_model(vocab_size, emb, d_model=512, N=6, d_ff=2048, h=8, dropout=0.1):
 #     TRAINING       #
 ######################
 
-""" Batches and Masking """
-class Batch:
-    "Object for holding a batch of data with mask during training."
-    # Maybe it is the norm that should be blamed, I solved this by fixing the Batch class,
-    # self.ntokens = (self.trg_y != pad).data.sum()
-    # -> self.ntokens = (self.trg_y != pad).data.sum().item()
-    # for (self.trg_y != pad).data.sum() is a tensor.
-    def __init__(self, src, trg=None, pad=0):
-        self.src = src
-        self.src_mask = (src != pad).unsqueeze(-2)
-        if trg is not None:
-            self.trg = trg[:, :-1]
-            self.trg_y = trg[:, 1:]
-            self.trg_mask = self.make_std_mask(self.trg, pad)
-            self.ntokens = (self.trg_y != pad).data.sum().item()
-    
-    @staticmethod
-    def make_std_mask(tgt, pad):
-        "Create a mask to hide padding and future words."
-        tgt_mask = (tgt != pad).unsqueeze(-2)
-        tgt_mask = tgt_mask & Variable(
-            subsequent_mask(tgt.size(-1)).type_as(tgt_mask.data))
-        return tgt_mask
+def greedy_decode(model, vocab, src, src_mask, trg=None, max_len=60):
+    if trg is not None:
+        max_len = trg.size(1)
 
-class Elmo_Batch:
-    "Object for holding a batch of data with mask during training."
-    def __init__(self, src, src_y, trg=None, trg_y=None, pad=0):
-        self.src = src
-        self.src_mask = (src_y != pad).unsqueeze(-2)
+    sents = [[vocab.stoi["<s>"]] for _ in range(len(src))]
+    ys = torch.Tensor(sents).type_as(src.data)
+
+    memory = model.encode(src, src_mask)
+    for i in range(max_len):
+        # print("decoding step %d" % (i))
+
+        # if train, use trg; if pred, use ys
         if trg is not None:
-            self.trg = trg
-            self.trg_y = trg_y
-            self.trg_mask = self.make_std_mask(trg_y, pad)
-            self.ntokens = (self.trg_y != pad).data.sum().item()
-    
-    @staticmethod
-    def make_std_mask(tgt, pad):
-        "Create a mask to hide padding and future words."
-        tgt_mask = (tgt != pad).unsqueeze(-2)
-        tgt_mask = tgt_mask & Variable(
-            subsequent_mask(tgt.size(-1)).type_as(tgt_mask.data))
-        return tgt_mask
+            ys = trg[:, :i + 1] 
+
+        # print("Decoding memory src_mask, ys, ys_mask: ", 
+                # memory.shape, src_mask.shape, Variable(ys).shape, 
+                # Variable(subsequent_mask(ys.size(1)).type_as(src.data)).shape)
+
+        out = model.decode(memory, src_mask, Variable(ys), 
+                Variable(subsequent_mask(ys.size(1)).type_as(src.data)))
+
+        # get last word of whole representation
+        prob = model.generator(out[:, -1])
+        _, next_words = torch.max(prob, dim = -1) # batch
+        next_words = next_words.view(-1, 1) # transpose to batch * word
+
+        # concat last word into y sequence
+        ys = torch.cat([ys, next_words.type_as(src.data)], dim=1)
+
+    return out
 
 """ Training Loop """
-
-def run_epoch(data_iter, model, loss_compute, vocab=None, emb=None):
+def run_epoch(data_iter, model, loss_compute, vocab, 
+              model_file=None, seq_train=False):
     "Standard Training and Logging Function"
     start = time.time()
     total_tokens = 0
     total_loss = 0
     tokens = 0
-    # change batch.ntokens to batch.ntokens.float().item() 
-    # due to pytorch new version. do the same thing for norm
+
     for i, batch in enumerate(data_iter):
-        # out = model.forward(batch.src, batch.trg,
-                            # batch.src_mask, batch.trg_mask)
         # print("Run Epoche SRC v.s. TRG: ", batch.src.shape, batch.src_mask.shape, batch.trg.shape, batch.trg_mask.shape, batch.trg_y.shape)
-        out = model(batch.src, batch.trg, batch.src_mask, batch.trg_mask)
+
+        if seq_train:
+            # decoder sequential training
+            out = greedy_decode(model, vocab, batch.src, batch.src_mask, trg=batch.trg)
+        else:
+            # decoder one-time training 
+            out = model(batch.src, batch.trg, batch.src_mask, batch.trg_mask)
+        
+        # out = model(batch.src, batch.trg, batch.src_mask, batch.trg_mask)
+
         loss = loss_compute(out, batch.trg_y, batch.ntokens)
         total_loss += loss
         total_tokens += batch.ntokens
@@ -352,17 +348,23 @@ def run_epoch(data_iter, model, loss_compute, vocab=None, emb=None):
         if i % 50 == 1:
             elapsed = time.time() - start
             print("Iteration: %d Loss: %f Tokens per Sec: %f" %
-                    (i, loss / batch.ntokens, tokens / elapsed))
+                    (i, loss / batch.ntokens, tokens / elapsed), end='\t')
             start = time.time()
             tokens = 0
             
             # evaluate translation quality
-            if vocab and emb:
-                out = greedy_decode(model, batch.src, batch.src_mask, 
-                                    vocab, emb, max_len=60)
-                print("Translation:", ' '.join(out[0]).split('</s>')[0])
+            out = greedy_decode(model, vocab, batch.src, batch.src_mask)
+            probs = model.generator(out)
+            _, s = torch.max(probs, dim = -1) # batch * words
+            trans = [[vocab.itos[w] for w in words] for words in s]
+            print("Translation:", ' '.join(random.choice(trans)).split('</s>')[0][:50])
 
-    return total_loss / total_tokens
+            if model_file is not None:
+                # print("Save model...")
+                torch.save(model.state_dict(), model_file)
+
+    # avoid zero division error
+    return total_loss / total_tokens if total_tokens else 0
 
 """ Training Data and Batching """
 global max_src_in_batch, max_tgt_in_batch
@@ -379,7 +381,6 @@ def batch_size_fn(new, count, sofar):
     return max(src_elements, tgt_elements)
 
 """ Optimizer """
-
 class NoamOpt:
     "Optim wrapper that implements rate."
     def __init__(self, model_size, factor, warmup, optimizer):
@@ -452,6 +453,9 @@ class SimpleLossCompute:
     # change loss.data[0] to loss.item() due to pytorch new version. do the same thing for norm
     def __call__(self, x, y, norm):
         x = self.generator(x)
+
+        # print("Loss size - x, y, xx, yy:", x.shape, y.shape, 
+                # x.contiguous().view(-1, x.size(-1)).shape, y.contiguous().view(-1).shape)
         loss = self.criterion(x.contiguous().view(-1, x.size(-1)), 
                               y.contiguous().view(-1)) / norm
         loss.backward()
@@ -518,48 +522,6 @@ class MultiGPULossCompute:
             self.opt.optimizer.zero_grad()
         return total * normalize
 
-def greedy_decode(model, src, src_mask, vocab, emb='glove', max_len=60):
-    batch_size = src.size(0)
-    sentences = [[''] for _ in range(batch_size)]
-    start_symbols = [vocab.stoi["<s>"]] * batch_size
-
-    def get_ys(inputs):
-        if 'elmo' in emb:
-            # ELMo: batch * 1 * 50
-            ys = batch_to_ids(inputs).type_as(src.data)
-        else:
-            # Glove: batch * words
-            ys = torch.Tensor(inputs).transpose(0, 1).type_as(src.data)
-        return ys
-
-    inputs = sentences if emb=='elmo' else start_symbols
-    ys = get_ys(inputs)
-
-    memory = model.encode(src, src_mask)
-    for i in range(max_len - 1):
-        # print("memory, src_mask, ys, ys_mask: ", memory.shape, src_mask.shape, 
-               # Variable(ys).shape, Variable(subsequent_mask(ys.size(1)).type_as(src.data)).shape)
-
-        out = model.decode(memory, src_mask, Variable(ys), 
-                           Variable(subsequent_mask(ys.size(1))
-                                    .type_as(src.data)))
-        prob = model.generator(out[:, -1])
-        _, next_words = torch.max(prob, dim = 1)
-        next_words = list(next_words)
-
-        # print("Next words: ", next_words)
-        for i in range(batch_size):
-            sentences[i] += [vocab.itos[next_words[i]]]
-
-        if 'elmo' in emb:
-            ys = get_ys(sentences)
-        else:
-            ys = torch.cat([ys, get_ys([next_words])], dim=1)
-
-    # print("Trg snetence: ", sentences)
-    # return ys
-    return sentences
-
 #####################
 #     Iterator      #
 #####################
@@ -582,51 +544,60 @@ class MyIterator(data.Iterator):
                                           self.batch_size_fn):
                 self.batches.append(sorted(b, key=self.sort_key))
 
+""" Batches and Masking """
+class Batch:
+    "Object for holding a batch of data with mask during training."
+    # Maybe it is the norm that should be blamed, I solved this by fixing the Batch class,
+    # self.ntokens = (self.trg_y != pad).data.sum()
+    # -> self.ntokens = (self.trg_y != pad).data.sum().item()
+    # for (self.trg_y != pad).data.sum() is a tensor.
+    def __init__(self, src, trg=None, pad=0):
+        self.src = src
+        self.src_mask = (src != pad).unsqueeze(-2)
+        if trg is not None:
+            self.trg = trg[:, :-1]
+            self.trg_y = trg[:, 1:]
+            self.trg_mask = self.make_std_mask(self.trg, pad)
+            self.ntokens = (self.trg_y != pad).data.sum().item()
+    
+    @staticmethod
+    def make_std_mask(tgt, pad):
+        "Create a mask to hide padding and future words."
+        tgt_mask = (tgt != pad).unsqueeze(-2)
+        tgt_mask = tgt_mask & Variable(
+            subsequent_mask(tgt.size(-1)).type_as(tgt_mask.data))
+        return tgt_mask
+
 def rebatch(pad_idx, batch):
     "Fix order in torchtext to match ours"
     src, trg = batch.src.transpose(0, 1), batch.trg.transpose(0, 1)
     return Batch(src, trg, pad_idx)
 
-def elmo_rebatch(pad_idx, batch, vocab, device):
-    "Fix order in torchtext to match ours"
-    src, trg = [], []
-    # remove src </s> and trg <s>
-    src_y, trg_y = batch.src.transpose(0, 1)[:, :-1], batch.trg.transpose(0, 1)[:, 1:]
-
-    for i in range(len(batch)):
-        src.append([vocab.itos[id.item()] for id in src_y[i]])
-        trg.append([vocab.itos[id.item()] for id in trg_y[i]])
-
-    src, trg = batch_to_ids(src).to(device), batch_to_ids(trg).to(device)
-
-    return Elmo_Batch(src, src_y, trg, trg_y, pad_idx)
-
 #####################
 #   Word Embedding  #
 #####################
-
 options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json"
 weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
-def build_pretrained(emb_name, vocab, device, elmo_options=options_file, elmo_weights=weight_file):
-    data_generator, emb, emb_dim = None, None, 512
 
-    pad_idx = vocab.stoi["<blank>"]
-    if 'glove' in emb_name:
-        emb_dim = 200
-        data_generator = lambda data: (rebatch(pad_idx, b) for b in data)
-        emb = nn.Embedding.from_pretrained(vocab.vectors)
+def get_emb(en_emb_name, de_emb_name, vocab, device, d_model=512, 
+            elmo_options=options_file, elmo_weights=weight_file):
 
-    elif 'elmo' in emb_name: 
-        elmo = Elmo(elmo_options, elmo_weights, 1, dropout=0).to(device)
+    elmo = Elmo(elmo_options, elmo_weights, 1, dropout=0).to(device)
+    def elmo_emb(batch_words):
+        sents = [[vocab.itos[i] for i in words] for words in batch_words]
+        # ELMo char_ids input = batch * words * 50
+        char_ids = batch_to_ids(sents).to(device)
+        emb = elmo(char_ids)['elmo_representations'][0]
+        return emb
 
-        emb_dim = 1024
-        data_generator = lambda data: (elmo_rebatch(pad_idx, b, vocab, device) for b in data)
-        emb = lambda char_ids: elmo(char_ids)['elmo_representations'][0]
+    def choose_emb(emb_name): 
+        if 'elmo' in emb_name: 
+            emb = elmo_emb
+        elif 'glove' in emb_name:
+            assert vocab.vectors is not None
+            emb = nn.Embedding.from_pretrained(vocab.vectors)
+        else:
+            emb = nn.Embedding(len(vocab), d_model)
+        return emb
 
-    # TODO bert embedding
-    elif 'bert' in emb_name: pass
-    else:
-        data_generator = lambda data: (rebatch(pad_idx, b) for b in data)
-        emb = nn.Embedding(len(vocab), emb_dim)
-
-    return data_generator, emb, emb_dim
+    return [choose_emb(name) for name in [en_emb_name, de_emb_name]]
