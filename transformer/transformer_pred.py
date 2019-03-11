@@ -27,7 +27,7 @@ import sys
 import random
 from pprint import pprint
 
-from Model import MyIterator, make_model, batch_size_fn, greedy_decode, build_pretrained
+from Model import MyIterator, make_model, rebatch, batch_size_fn, greedy_decode, get_emb
 from allennlp.modules.elmo import batch_to_ids
 
 def main():
@@ -35,12 +35,14 @@ def main():
     EOS_WORD = '</s>'
     BLANK_WORD = "<blank>"
 
-    DATA = 'lang8'
+    DATA = 'lang8_small'
     # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
-    EMB = 'bow'
-    # EMB = 'elmo'
-    # EMB = 'glove.6B.200d'
-    EMB_DIM = 512
+    # EN_EMB, DE_EMB, EMB_DIM = 'basic', 'basic', 512
+    # EN_EMB, DE_EMB, EMB_DIM = 'glove', 'basic', 200
+    # EN_EMB, DE_EMB, EMB_DIM = 'glove', 'glove', 200
+    EN_EMB, DE_EMB, EMB_DIM = 'elmo', 'basic', 1024
+    # EN_EMB, DE_EMB, EMB_DIM = 'elmo', 'elmo', 1024
+
     BATCH_SIZE = 30
 
     # GPU to use
@@ -51,10 +53,13 @@ def main():
     src_dir = os.path.join(root_dir, 'data/src')
     test_dir = os.path.join(root_dir, 'data/test')
     eval_dir = os.path.join(root_dir, 'data/eval')
+    vocab_file = os.path.join(root_dir, 'data/models', '%s.vocab' % (DATA))
+    # if 'glove' in [EN_EMB, DE_EMB]:
+        # vocab_file = os.path.join(root_dir, 'data/models', '%s.glove.vocab' % (DATA))
+
     elmo_options_file = os.path.join(root_dir, 'data/embs/elmo.json')
     elmo_weights_file = os.path.join(root_dir, 'data/embs/elmo.hdf5')
-    model_file = os.path.join(root_dir, 'data/models', '%s.%s.transformer.pt' % (DATA, EMB))
-    vocab_file = os.path.join(root_dir, 'data/models', '%s.vocab' % (DATA))
+    model_file = os.path.join(root_dir, 'data/models', '%s.%s.%s.transformer.pt' % (DATA, EN_EMB, DE_EMB))
 
     if not os.path.exists(eval_dir):
         os.makedirs(eval_dir)
@@ -72,9 +77,6 @@ def main():
 
     test = datasets.TranslationDataset(path=os.path.join(src_dir, DATA), 
             exts=('.test.src', '.test.trg'), fields=(TEXT, TEXT))
-    # test_iter = MyIterator(test, batch_size=BATCH_SIZE, device=device,
-                            # repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
-                            # batch_size_fn=batch_size_fn, train=False)
     test_iter = data.Iterator(test, batch_size=BATCH_SIZE, device=device, 
                               sort=False, repeat=False, train=False)
 
@@ -85,42 +87,39 @@ def main():
     ###############
     #  Vocabuary  #
     ###############
+    # if 'glove' in [EN_EMB, DE_EMB]:
+        # TEXT.build_vocab(test.src, vectors='glove.6B.200d')
+    # else:
+        # TEXT.vocab = torch.load(vocab_file)
     TEXT.vocab = torch.load(vocab_file)
-    print("Vocab size: ", len(TEXT.vocab))
+    pad_idx = TEXT.vocab.stoi["<blank>"]
 
+    print("Load %s vocabuary; vocab size = %d" % (DATA, len(TEXT.vocab)))
     #####################
     #   Word Embedding  #
     #####################
-    _, emb, EMB_DIM = build_pretrained(EMB, TEXT.vocab, device, 
-            elmo_options=elmo_options_file, elmo_weights=elmo_weights_file)
+    encoder_emb, decoder_emb = get_emb(EN_EMB, DE_EMB, TEXT.vocab, device, 
+                                       d_model=EMB_DIM,
+                                       elmo_options=elmo_options_file, 
+                                       elmo_weights=elmo_weights_file)
 
     ##########################
     #      Translation       #
     ##########################
-    model = make_model(len(TEXT.vocab), emb, d_model=EMB_DIM).to(device)
+    model = make_model(len(TEXT.vocab), encoder_emb, decoder_emb, 
+                       d_model=EMB_DIM).to(device)
     model.load_state_dict(torch.load(model_file))
     model.eval()
 
-    print("Predicting %s %s ..." % (DATA, EMB))
-    for batch in test_iter:
-        src = batch.src = batch.src.transpose(0, 1)
-        batch.trg = batch.trg.transpose(0, 1)
-        src_mask = (src != TEXT.vocab.stoi["<blank>"]).unsqueeze(-2)
-        batch_size = len(src)
+    print("Predicting %s %s %s ..." % (DATA, EN_EMB, DE_EMB))
 
-        if 'elmo' in EMB:
-            sen = []
-            for i in range(batch_size):
-                sen.append([TEXT.vocab.itos[id.item()] for id in src[i]])
-            src = batch_to_ids(sen).type_as(src.data)
-
-        src = Variable(src)
-
-        out = greedy_decode(model, TEXT.vocab, src, src_mask)
+    for batch in (rebatch(pad_idx, b) for b in test_iter):
+        out = greedy_decode(model, TEXT.vocab, batch.src, batch.src_mask)
         # print("SRC OUT: ", src.shape, out.shape)
         probs = model.generator(out)
-        _, s = torch.max(probs, dim = -1)
-        trans = [[TEXT.vocab.itos[word] for word in words] for words in s]
+        _, pred = torch.max(probs, dim = -1)
+
+        trans = [[TEXT.vocab.itos[word] for word in words] for words in pred]
         source = [[TEXT.vocab.itos[word] for word in words] for words in batch.src]
         target = [[TEXT.vocab.itos[word] for word in words] for words in batch.trg]
         print("Source:", ' '.join(source[0]).split('</s>')[0])
