@@ -12,20 +12,17 @@ from torch.utils.data import Dataset, DataLoader
 import spacy
 import sys
 from allennlp.modules.elmo import Elmo, batch_to_ids
+import codecs
+from tqdm import tqdm
+from collections import Counter, namedtuple
+from torch.utils.data import Dataset, DataLoader
 
 nlp = spacy.load('en_core_web_lg') # For the glove embeddings
 
 """ Enable GPU training """
 USE_CUDA = torch.cuda.is_available()
-print('Use_CUDA={}'.format(USE_CUDA))
 if USE_CUDA:
-    # You can change device by `torch.cuda.set_device(device_id)`
-    print('current_device={}'.format(torch.cuda.current_device()))
-    
-import codecs
-from tqdm import tqdm
-from collections import Counter, namedtuple
-from torch.utils.data import Dataset, DataLoader
+    torch.cuda.set_device(1) 
 
 PAD = 0
 BOS = 1
@@ -296,7 +293,7 @@ class LuongAttnDecoderRNN(nn.Module):
         else:
             self.W_s = nn.Linear(self.hidden_size, self.vocab_size, bias=bias)
         
-    def forward(self, input_seq, decoder_hidden, encoder_outputs, src_lens):
+    def forward(self, input_seq, decoder_hidden, encoder_outputs, src_lens, elmo_emb):
         """ Args:
             - input_seq      : (batch_size)
             - decoder_hidden : (t=0) last encoder hidden state (num_layers * num_directions, batch_size, hidden_size) 
@@ -308,11 +305,13 @@ class LuongAttnDecoderRNN(nn.Module):
             - decoder_hidden   : (num_layers, batch_size, hidden_size)
             - attention_weights: (batch_size, max_src_len)
         """        
-        # (batch_size) => (seq_len=1, batch_size)
-        input_seq = input_seq.unsqueeze(0)
-        
-        # (seq_len=1, batch_size) => (seq_len=1, batch_size, word_vec_size) 
-        emb = self.embedding(input_seq)
+        if elmo_emb is None:
+            # (batch_size) => (seq_len=1, batch_size)
+            input_seq = input_seq.unsqueeze(0)
+            # (seq_len=1, batch_size) => (seq_len=1, batch_size, word_vec_size) 
+            emb = self.embedding(input_seq)
+        else:
+            emb = elmo_emb
         
         # rnn returns:
         # - decoder_output: (seq_len=1, batch_size, hidden_size)
@@ -436,8 +435,9 @@ def load_elmo_embeddings(sentences, max_seq, elmo):
     
     embeddings = elmo_embeddings.transpose(0,1)
     # dimension: (max_src_len, batch_size, word_vec_size)
-    emb_zeros = torch.zeros(max_seq-embeddings.size()[0], embeddings.size()[1], embeddings.size()[2])
-    embeddings = torch.cat((embeddings, emb_zeros), 0)
+    if max_seq-embeddings.size()[0] > 0:
+        emb_zeros = torch.zeros(max_seq-embeddings.size()[0], embeddings.size()[1], embeddings.size()[2])
+        embeddings = torch.cat((embeddings, emb_zeros), 0)
     return embeddings
 
 def sequence_mask(sequence_length, max_len=None):
@@ -641,7 +641,7 @@ def train(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens,
     decoder_outputs = Variable(torch.zeros(opts.max_seq_len, batch_size, decoder.vocab_size))
 
     # pretrained embedding
-    if opts.pretrained_embeddings == 'elmo':
+    if opts.pretrained_embeddings == 'elmo_input' or opts.pretrained_embeddings == 'elmo_both':
         elmo_emb = load_elmo_embeddings(src_sents, src_seqs.size()[0], elmo)
     else:
         elmo_emb = None
@@ -681,17 +681,29 @@ def train(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens,
     # Initialize decoder's hidden state as encoder's last hidden state.
     decoder_hidden = encoder_hidden
     
+    if opts.pretrained_embeddings == 'elmo_both':
+        elmo_emb = load_elmo_embeddings(tgt_sents, tgt_seqs.size()[0], elmo)
+        if USE_CUDA:
+            elmo_emb = elmo_emb.cuda()
+    else:
+        elmo_emb = None
+    
+    
     # Run through decoder one time step at a time.
     for t in range(max_tgt_len):
-        
         # decoder returns:
         # - decoder_output   : (batch_size, vocab_size)
         # - decoder_hidden   : (num_layers, batch_size, hidden_size)
         # - attention_weights: (batch_size, max_src_len)
-        decoder_output, decoder_hidden, attention_weights = decoder(input_seq, decoder_hidden,
-                                                                    encoder_outputs, src_lens)
-
-        # Store decoder outputs.
+        
+        if opts.pretrained_embeddings == 'elmo_both':
+            if t==0:
+                decoder_output, decoder_hidden, attention_weights = decoder(input_seq, decoder_hidden, encoder_outputs, src_lens, elmo_emb=None)    
+            else:
+                decoder_output, decoder_hidden, attention_weights = decoder(input_seq, decoder_hidden, encoder_outputs, src_lens, elmo_emb[t].unsqueeze(0))# Store decoder outputs.
+        else:
+            decoder_output, decoder_hidden, attention_weights = decoder(input_seq, decoder_hidden, encoder_outputs, src_lens, elmo_emb=None)
+        
         decoder_outputs[t] = decoder_output
         
         # Next input is current target
@@ -731,9 +743,6 @@ def train(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens,
            encoder_grad_norm, decoder_grad_norm, clipped_encoder_grad_norm, clipped_decoder_grad_norm
 
 def training(encoder, decoder, encoder_optim, decoder_optim, train_iter, valid_iter, opts, load_checkpoint, checkpoint, elmo):
-    """ Open port 6006 and see tensorboard.
-    Ref:  https://medium.com/@dexterhuang/%E7%B5%A6-pytorch-%E7%94%A8%E7%9A%84-tensorboard-bb341ce3f837
-    """
     from datetime import datetime
     # from tensorboardX import SummaryWriter
     # --------------------------
@@ -742,8 +751,6 @@ def training(encoder, decoder, encoder_optim, decoder_optim, train_iter, valid_i
     model_name = 'seq2seq'
     datetime = ('%s' % datetime.now()).split('.')[0]
     experiment_name = '{}_{}'.format(model_name, datetime)
-    #tensorboard_log_dir = './tensorboard-logs/{}/'.format(experiment_name)
-    #writer = SummaryWriter(tensorboard_log_dir)
 
     # --------------------------
     # Configure training
@@ -813,15 +820,7 @@ def training(encoder, decoder, encoder_optim, decoder_optim, train_iter, valid_i
                 print('- Current GPU memory usage: {}'.format(curr_gpu_memory_usage))
                 print('- Diff GPU memory usage: {}'.format(diff_gpu_memory_usage))
                 print('='*100 + '\n')
-
-                # write_to_tensorboard(writer, global_step, total_loss, total_corrects, total_words, total_accuracy,
-                #                     encoder_grad_norm, decoder_grad_norm, clipped_encoder_grad_norm, clipped_decoder_grad_norm,
-                #                     encoder, decoder,
-                #                     gpu_memory_usage={
-                #                         'curr': curr_gpu_memory_usage,
-                #                         'diff': diff_gpu_memory_usage
-                #                     })
-
+                
                 total_loss = 0
                 total_corrects = 0
                 total_words = 0
@@ -866,7 +865,7 @@ def evaluate(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens, encod
     # `opts.max_seq_len` is a fixed number, unlike `max_tgt_len` always varys.
     decoder_outputs = Variable(torch.zeros(opts.max_seq_len, batch_size, decoder.vocab_size), volatile=True)
 
-    if opts.pretrained_embeddings == 'elmo':
+    if opts.pretrained_embeddings == 'elmo_input' or opts.pretrained_embeddings == 'elmo_both':
         elmo_emb = load_elmo_embeddings(src_sents, src_seqs.size()[0], elmo)
     else:
         elmo_emb = None
@@ -896,18 +895,28 @@ def evaluate(src_sents, tgt_sents, src_seqs, tgt_seqs, src_lens, tgt_lens, encod
     # -------------------------------------
     # Initialize decoder's hidden state as encoder's last hidden state.
     decoder_hidden = encoder_hidden
-    #if max_tgt_len > opts.max_seq_len:
-    #    max_tgt_len = opts.max_seq_len 
+    
+    if opts.pretrained_embeddings == 'elmo_both':
+        elmo_emb = load_elmo_embeddings(tgt_sents, tgt_seqs.size()[0], elmo)
+        if USE_CUDA:
+            elmo_emb = elmo_emb.cuda()
+    else:
+        elmo_emb = None
+   
     # Run through decoder one time step at a time.
     for t in range(max_tgt_len):
-        
         # decoder returns:
         # - decoder_output   : (batch_size, vocab_size)
         # - decoder_hidden   : (num_layers, batch_size, hidden_size)
         # - attention_weights: (batch_size, max_src_len)
-        decoder_output, decoder_hidden, attention_weights = decoder(input_seq, decoder_hidden,
-                                                                    encoder_outputs, src_lens)
-
+        
+        if opts.pretrained_embeddings == 'elmo_both':
+            if t==0: 
+                decoder_output, decoder_hidden, attention_weights = decoder(input_seq, decoder_hidden, encoder_outputs, src_lens, elmo_emb=None)
+            else:
+                decoder_output, decoder_hidden, attention_weights = decoder(input_seq, decoder_hidden, encoder_outputs, src_lens, elmo_emb[t].unsqueeze(0))
+        else:
+            decoder_output, decoder_hidden, attention_weights = decoder(input_seq, decoder_hidden, encoder_outputs, src_lens, elmo_emb=None)
         # Store decoder outputs.
         decoder_outputs[t] = decoder_output
         
@@ -955,7 +964,7 @@ def translate(src_text, train_dataset, encoder, decoder, opts, elmo, max_seq_len
     all_attention_weights = torch.zeros(max_seq_len, len(src_seqs))
    
     # pretrained embedding
-    if opts.pretrained_embeddings == 'elmo':
+    if opts.pretrained_embeddings == 'elmo_input' or opts.pretrained_embeddings == 'elmo_both':
         elmo_emb = load_elmo_embeddings([src_sent], src_seqs.size()[0], elmo)
     else:
         elmo_emb = None 
@@ -983,16 +992,15 @@ def translate(src_text, train_dataset, encoder, decoder, opts, elmo, max_seq_len
     # -------------------------------------
     # Initialize decoder's hidden state as encoder's last hidden state.
     decoder_hidden = encoder_hidden
-     
+    elmo_emb = None  
     # Run through decoder one time step at a time.
     for t in range(max_seq_len):
-        
         # decoder returns:
         # - decoder_output   : (batch_size, vocab_size)
         # - decoder_hidden   : (num_layers, batch_size, hidden_size)
         # - attention_weights: (batch_size, max_src_len)
         decoder_output, decoder_hidden, attention_weights = decoder(input_seq, decoder_hidden,
-                                                                    encoder_outputs, src_lens)
+                                                                    encoder_outputs, src_lens, elmo_emb)
 
         # Store attention weights.
         # .squeeze(0): remove `batch_size` dimension since batch_size=1
