@@ -217,6 +217,34 @@ class PositionwiseFeedForward(nn.Module):
     def forward(self, x):
         return self.w_2(self.dropout(F.relu(self.w_1(x))))
 
+#####################
+#   Word Embedding  #
+#####################
+options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json"
+weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
+
+def get_emb(en_emb_name, de_emb_name, vocab, device, d_model=512, 
+            elmo_options=options_file, elmo_weights=weight_file):
+
+    elmo = Elmo(elmo_options, elmo_weights, 1, dropout=0).to(device)
+    def elmo_emb(batch_words):
+        sents = [[vocab.itos[i] for i in words] for words in batch_words]
+        # ELMo char_ids input = batch * words * 50
+        char_ids = batch_to_ids(sents).to(device)
+        emb = elmo(char_ids)['elmo_representations'][0]
+        return emb
+
+    def choose_emb(emb_name): 
+        if 'elmo' in emb_name: 
+            emb = elmo_emb
+        elif 'glove' in emb_name:
+            emb = nn.Embedding.from_pretrained(vocab.vectors)
+        else:
+            emb = nn.Embedding(len(vocab), d_model)
+        return emb
+
+    return [choose_emb(name) for name in [en_emb_name, de_emb_name]]
+
 #############################
 #   Embeddings and Softmax  #
 #############################
@@ -573,31 +601,3 @@ def rebatch(pad_idx, batch):
     src, trg = batch.src.transpose(0, 1), batch.trg.transpose(0, 1)
     return Batch(src, trg, pad_idx)
 
-#####################
-#   Word Embedding  #
-#####################
-options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json"
-weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
-
-def get_emb(en_emb_name, de_emb_name, vocab, device, d_model=512, 
-            elmo_options=options_file, elmo_weights=weight_file):
-
-    elmo = Elmo(elmo_options, elmo_weights, 1, dropout=0).to(device)
-    def elmo_emb(batch_words):
-        sents = [[vocab.itos[i] for i in words] for words in batch_words]
-        # ELMo char_ids input = batch * words * 50
-        char_ids = batch_to_ids(sents).to(device)
-        emb = elmo(char_ids)['elmo_representations'][0]
-        return emb
-
-    def choose_emb(emb_name): 
-        if 'elmo' in emb_name: 
-            emb = elmo_emb
-        elif 'glove' in emb_name:
-            assert vocab.vectors is not None
-            emb = nn.Embedding.from_pretrained(vocab.vectors)
-        else:
-            emb = nn.Embedding(len(vocab), d_model)
-        return emb
-
-    return [choose_emb(name) for name in [en_emb_name, de_emb_name]]

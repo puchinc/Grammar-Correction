@@ -9,34 +9,41 @@ Three datasets
 2. Lang8
 3. AESW Dataset 
 
-### Step 1: Preprocess the data
+
+### Step 1.1: Preprocess conll
+```
+awk -F $'\t' '{print $1}' data/src/conll.txt | perl -i -pe 's|<del>.*?</del>||g' | perl -i -pe 's|<.*?>||g' | sed -e 's/^[ \t]*//' | tr -s ' ' > data/src/conll.src
+awk -F $'\t' '{print $2}' data/src/conll.txt | perl -i -pe 's|<del>.*?</del>||g' | perl -i -pe 's|<.*?>||g' | sed -e 's/^[ \t]*//' | tr -s ' ' > data/src/conll.trg
+```
+
+### Step 1.2: Preprocess lang8
 ```
 python parser/lang8_parser.py \
        -i lang-8-20111007-L1-v2.dat \
        -o data/src \
        -l2 English
+awk -F $'\t' '{print $1}' data/src/lang8.txt > data/src/lang8.src 
+awk -F $'\t' '{print $2}' data/src/lang8.txt > data/src/lang8.trg
 ```
 
 ### Step 2: Split datasets
 ```
-awk -F $'\t' '{print $1}' data/src/lang8.txt > data/src/lang8.src 
-awk -F $'\t' '{print $2}' data/src/lang8.txt > data/src/lang8.trg
 cd data/src
 python ../../parser/prepare_csv.py \
-       -i lang8.src \
-       -train lang8.train.src \
+       -i conll.src \
+       -train conll.train.src \
        -train_r 0.6 \
-       -test lang8.test.src \
+       -test conll.test.src \
        -test_r 0.2 \
-       -val lang8.val.src \
+       -val conll.val.src \
        -val_r 0.2
 python ../../parser/prepare_csv.py \
-       -i lang8.trg \
-       -train lang8.train.trg \
+       -i conll.trg \
+       -train conll.train.trg \
        -train_r 0.6 \
-       -test lang8.test.trg \
+       -test conll.test.trg \
        -test_r 0.2 \
-       -val lang8.val.trg \
+       -val conll.val.trg \
        -val_r 0.2
 cd -
 ```
@@ -80,9 +87,9 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 python transformer/trainsformer_train.py
 ```
 (transformer_env)
 python evaluation/gleu.py \
-       -s data/eval/lang8.eval.src \
-       -r data/eval/lang8.eval.trg \
-       --hyp data/eval/lang8.eval.pred
+    -s data/eval/conll.glove.glove.eval.src \
+    -r data/eval/conll.glove.glove.eval.trg \
+    --hyp data/eval/conll.glove.glove.eval.pred
 ``` 
 
 ## Batched Seq2seq Quickstart

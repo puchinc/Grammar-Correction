@@ -35,7 +35,7 @@ def main():
     BLANK_WORD = "<blank>"
     MIN_FREQ = 2
 
-    DATA = 'lang8_small'
+    DATA = 'conll'
 
     # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
     SEQ_TRAIN = False
@@ -45,8 +45,8 @@ def main():
     EN_EMB, DE_EMB, EMB_DIM, SEQ_TRAIN = 'elmo', 'basic', 1024, True
     # EN_EMB, DE_EMB, EMB_DIM, SEQ_TRAIN = 'elmo', 'elmo', 1024, True
 
-    BATCH_SIZE = 512
-    EPOCHES = 3
+    BATCH_SIZE = 500
+    EPOCHES = 100
 
     # GPU to use
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -58,8 +58,6 @@ def main():
     test_dir = os.path.join(root_dir, 'data/test')
     eval_dir = os.path.join(root_dir, 'data/eval')
     vocab_file = os.path.join(root_dir, 'data/models', '%s.vocab' % (DATA))
-    # if 'glove' in [EN_EMB, DE_EMB]:
-        # vocab_file = os.path.join(root_dir, 'data/models', '%s.glove.vocab' % (DATA))
 
     elmo_options_file = os.path.join(root_dir, 'data/embs/elmo.json')
     elmo_weights_file = os.path.join(root_dir, 'data/embs/elmo.hdf5')
@@ -98,17 +96,14 @@ def main():
     ###############
     #  Vocabuary  #
     ###############
-    # if os.path.exists(vocab_file):
-        # TEXT.vocab = torch.load(vocab_file)
-    # else:
-    if 'glove' in [EN_EMB, DE_EMB]:
-        TEXT.build_vocab(train.src, min_freq=MIN_FREQ, vectors='glove.6B.200d')
+    if os.path.exists(vocab_file):
+        TEXT.vocab = torch.load(vocab_file)
     else:
-        TEXT.build_vocab(train.src, min_freq=MIN_FREQ)
-    pad_idx = TEXT.vocab.stoi["<blank>"]
+        print("Save %s vocabuary; vocab size = %d" % (DATA, len(TEXT.vocab)))
+        TEXT.build_vocab(train.src, min_freq=MIN_FREQ, vectors='glove.6B.200d')
+        torch.save(TEXT.vocab, vocab_file)
 
-    print("Save %s vocabuary; vocab size = %d" % (DATA, len(TEXT.vocab)))
-    torch.save(TEXT.vocab, vocab_file)
+    pad_idx = TEXT.vocab.stoi["<blank>"]
 
     #####################
     #   Word Embedding  #
@@ -123,11 +118,15 @@ def main():
     ##########################
     model = make_model(len(TEXT.vocab), encoder_emb, decoder_emb, 
                        d_model=EMB_DIM).to(device)
-    # if os.path.exists(model_file):
-        # model.load_state_dict(torch.load(model_file))
+    if os.path.exists(model_file):
+        print("Restart from last checkpoint...")
+        model.load_state_dict(torch.load(model_file))
+
+    # for params in model.named_parameters():
+        # print(params)
+    # sys.exit()
 
     criterion = LabelSmoothing(size=len(TEXT.vocab), padding_idx=pad_idx, smoothing=0.1).to(device)
-
     model_opt = NoamOpt(EMB_DIM, 1, 2000,
                         torch.optim.Adam(model.parameters(), lr=0, 
                         betas=(0.9, 0.98), eps=1e-9))

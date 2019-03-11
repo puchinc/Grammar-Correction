@@ -54,8 +54,6 @@ def main():
     test_dir = os.path.join(root_dir, 'data/test')
     eval_dir = os.path.join(root_dir, 'data/eval')
     vocab_file = os.path.join(root_dir, 'data/models', '%s.vocab' % (DATA))
-    # if 'glove' in [EN_EMB, DE_EMB]:
-        # vocab_file = os.path.join(root_dir, 'data/models', '%s.glove.vocab' % (DATA))
 
     elmo_options_file = os.path.join(root_dir, 'data/embs/elmo.json')
     elmo_weights_file = os.path.join(root_dir, 'data/embs/elmo.hdf5')
@@ -107,8 +105,6 @@ def main():
     model.load_state_dict(torch.load(model_file))
     model.eval()
 
-    print("Predicting %s %s %s ..." % (DATA, EN_EMB, DE_EMB))
-
     f_src = open(os.path.join(eval_dir, 
         '%s.%s.%s.eval.src' % (DATA, EN_EMB, DE_EMB)), 'w+')
     f_trg = open(os.path.join(eval_dir, 
@@ -116,6 +112,7 @@ def main():
     f_pred = open(os.path.join(eval_dir, 
         '%s.%s.%s.eval.pred' % (DATA, EN_EMB, DE_EMB)), 'w+')
 
+    print("Predicting %s %s %s ..." % (DATA, EN_EMB, DE_EMB))
     for batch in (rebatch(pad_idx, b) for b in test_iter):
         out = greedy_decode(model, TEXT.vocab, batch.src, batch.src_mask)
         # print("SRC OUT: ", src.shape, out.shape)
