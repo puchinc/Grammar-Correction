@@ -28,16 +28,7 @@ import spacy
 nlp = spacy.load('en_core_web_lg') # For the glove embeddings
 import pickle
 from allennlp.modules.elmo import Elmo, batch_to_ids
-import h5py
-
-""" Enable GPU training """
-USE_CUDA = torch.cuda.is_available()
-print('Use_CUDA={}'.format(USE_CUDA))
-if USE_CUDA:
-    # You can change device by `torch.cuda.set_device(device_id)`
-    torch.cuda.set_device(2)
-    print('current_device={}'.format(torch.cuda.current_device()))
-    
+import h5py    
 import codecs
 from tqdm import tqdm
 from collections import Counter, namedtuple
@@ -154,7 +145,7 @@ def main():
     # See: https://github.com/spro/practical-pytorch/issues/34
     if opts.pretrained_embeddings=='glove':
         word_vec_size = nlp.vocab.vectors_length
-    elif opts.pretrained_embeddings=='elmo':
+    elif opts.pretrained_embeddings=='elmo_input' or opts.pretrained_embeddings=='elmo_both':
         word_vec_size = 1024
     else:
         word_vec_size = opts.word_vec_size 
@@ -178,7 +169,6 @@ def main():
                                       attention=opts.attention,
                                       tie_embeddings=opts.tie_embeddings,
                                       dropout=opts.dropout)
-
     if opts.pretrained_embeddings=='glove':
         glove_embeddings = load_spacy_glove_embedding(nlp, train_dataset.src_vocab)
         encoder.embedding.weight.data.copy_(glove_embeddings)
@@ -187,11 +177,10 @@ def main():
             encoder.embedding.weight.requires_grad = False
             decoder.embedding.weight.requires_grad = False
     elmo = None
-    if opts.pretrained_embeddings == 'elmo':
+    if opts.pretrained_embeddings == 'elmo_input' or opts.pretrained_embeddings == 'elmo_both':
         options_file = '../data/embs/elmo_2x4096_512_2048cnn_2xhighway_options.json'
         weight_file = '../data/embs/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5'
         elmo = Elmo(options_file, weight_file, 1, dropout=0)
-
     if LOAD_CHECKPOINT:
         encoder.load_state_dict(checkpoint['encoder_state_dict'])
         decoder.load_state_dict(checkpoint['decoder_state_dict'])
