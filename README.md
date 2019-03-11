@@ -88,14 +88,17 @@ python evaluation/gleu.py \
 ## Batched Seq2seq Quickstart
 
 ### Step 1: Train and validate the model
+
+You can replace the arguments with source and target of your choice. `emb_type` can be: `glove` for GloVe embedding, `none` for no pretrained embedding, `elmo_input` for ELMo embedding for input, and `elmo_both` for ELMo embedding for both input and output. 
+
 ```
 cd batched_seq2seq
 (batched_seq2seq_env)
 python seq2seq_train.py \
-       -train_src ./data/lang8_english_src_500k.txt \
-       -train_tgt ./data/lang8_english_tgt_500k.txt \
-       -val_src ./data/lang8_english_src_val_100k.txt \
-       -val_tgt ./data/lang8_english_src_val_100k.txt \
+       -train_src ./data/lang8_english_src_10k.txt \
+       -train_tgt ./data/lang8_english_tgt_10k.txt \
+       -val_src ./data/source.txt \
+       -val_tgt ./data/target_valid.txt \
        -emb_type glove
 ```
 
@@ -103,15 +106,15 @@ python seq2seq_train.py \
 ```
 (batched_seq2seq_env)
 python seq2seq_pred.py \
-       -test_src ./data/lang8_english_src_test_100k.txt
+       -test_src ./data/source_test.txt
 ```
 
 ### Step 3: Evaluate the model
 ```
 (batched_seq2seq_env)
 python ../evaluation/gleu.py \
-       -s ./data/lang8_english_src_test_100k.txt \
-       -r ./data/lang8_english_tgt_test_100k.txt \
+       -s ./data/source_test.txt \
+       -r ./data/target_test1.txt \
        --hyp ./data/pred.txt
 
 ```
