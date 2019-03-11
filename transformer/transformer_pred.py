@@ -35,12 +35,12 @@ def main():
     EOS_WORD = '</s>'
     BLANK_WORD = "<blank>"
 
-    DATA = 'lang8_small'
+    DATA = 'conll2014'
     # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
     # EN_EMB, DE_EMB, EMB_DIM = 'basic', 'basic', 512
     # EN_EMB, DE_EMB, EMB_DIM = 'glove', 'basic', 200
-    # EN_EMB, DE_EMB, EMB_DIM = 'glove', 'glove', 200
-    EN_EMB, DE_EMB, EMB_DIM = 'elmo', 'basic', 1024
+    EN_EMB, DE_EMB, EMB_DIM = 'glove', 'glove', 200
+    # EN_EMB, DE_EMB, EMB_DIM = 'elmo', 'basic', 1024
     # EN_EMB, DE_EMB, EMB_DIM = 'elmo', 'elmo', 1024
 
     BATCH_SIZE = 30

@@ -11,12 +11,24 @@ Three datasets
 
 
 ### Step 1.1: Preprocess conll
+remove words between <del></del>, then remove all tags, trim leading and unnecessary spaces 
+
 ```
 awk -F $'\t' '{print $1}' data/src/conll.txt | perl -i -pe 's|<del>.*?</del>||g' | perl -i -pe 's|<.*?>||g' | sed -e 's/^[ \t]*//' | tr -s ' ' > data/src/conll.src
 awk -F $'\t' '{print $2}' data/src/conll.txt | perl -i -pe 's|<del>.*?</del>||g' | perl -i -pe 's|<.*?>||g' | sed -e 's/^[ \t]*//' | tr -s ' ' > data/src/conll.trg
 ```
 
-### Step 1.2: Preprocess lang8
+### Step 1.2: Preprocess conll2014
+remove empty lines, lines contain http, tag, strange long character words, and very short sentences; trim leading and unnecessary spaces 
+
+```
+grep -vwE "(http|<.*>|^[[:space:]]*$|\w{20,}|^.{0,50}$)" data/conll/conll2014_allerrors.txt > data/src/conll2014.txt
+
+awk -F $'\t' '{print $1}' data/src/conll2014.txt > data/src/conll2014.src  
+awk -F $'\t' '{print $2}' data/src/conll2014.txt > data/src/conll2014.trg  
+```
+
+### Step 1.3: Preprocess lang8
 ```
 python parser/lang8_parser.py \
        -i lang-8-20111007-L1-v2.dat \
@@ -30,21 +42,21 @@ awk -F $'\t' '{print $2}' data/src/lang8.txt > data/src/lang8.trg
 ```
 cd data/src
 python ../../parser/prepare_csv.py \
-       -i conll.src \
-       -train conll.train.src \
-       -train_r 0.6 \
-       -test conll.test.src \
-       -test_r 0.2 \
-       -val conll.val.src \
-       -val_r 0.2
+    -i conll2014.src \
+    -train conll2014.train.src \
+    -train_r 0.6 \
+    -test conll2014.test.src \
+    -test_r 0.2 \
+    -val conll2014.val.src \
+    -val_r 0.2
 python ../../parser/prepare_csv.py \
-       -i conll.trg \
-       -train conll.train.trg \
-       -train_r 0.6 \
-       -test conll.test.trg \
-       -test_r 0.2 \
-       -val conll.val.trg \
-       -val_r 0.2
+    -i conll2014.trg \
+    -train conll2014.train.trg \
+    -train_r 0.6 \
+    -test conll2014.test.trg \
+    -test_r 0.2 \
+    -val conll2014.val.trg \
+    -val_r 0.2
 cd -
 ```
 

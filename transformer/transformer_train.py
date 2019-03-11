@@ -35,14 +35,14 @@ def main():
     BLANK_WORD = "<blank>"
     MIN_FREQ = 2
 
-    DATA = 'conll'
+    DATA = 'conll2014'
 
     # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
     SEQ_TRAIN = False
     # EN_EMB, DE_EMB, EMB_DIM = 'basic', 'basic', 512
     # EN_EMB, DE_EMB, EMB_DIM = 'glove', 'basic', 200
-    # EN_EMB, DE_EMB, EMB_DIM = 'glove', 'glove', 200
-    EN_EMB, DE_EMB, EMB_DIM, SEQ_TRAIN = 'elmo', 'basic', 1024, True
+    EN_EMB, DE_EMB, EMB_DIM = 'glove', 'glove', 200
+    # EN_EMB, DE_EMB, EMB_DIM, SEQ_TRAIN = 'elmo', 'basic', 1024, True
     # EN_EMB, DE_EMB, EMB_DIM, SEQ_TRAIN = 'elmo', 'elmo', 1024, True
 
     BATCH_SIZE = 500
@@ -51,7 +51,7 @@ def main():
     # GPU to use
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # device = ("cpu")
-    devices = [0, 1, 2, 3]
+    # devices = [0, 1, 2, 3]
 
     root_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
     src_dir = os.path.join(root_dir, 'data/src')
@@ -99,8 +99,9 @@ def main():
     if os.path.exists(vocab_file):
         TEXT.vocab = torch.load(vocab_file)
     else:
-        print("Save %s vocabuary; vocab size = %d" % (DATA, len(TEXT.vocab)))
+        print("Save %s vocabuary..." % (DATA), end='\t') 
         TEXT.build_vocab(train.src, min_freq=MIN_FREQ, vectors='glove.6B.200d')
+        print("vocab size = %d" % (len(TEXT.vocab)))
         torch.save(TEXT.vocab, vocab_file)
 
     pad_idx = TEXT.vocab.stoi["<blank>"]
