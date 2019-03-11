@@ -38,11 +38,12 @@ def main():
     DATA = 'lang8_small'
 
     # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
+    SEQ_TRAIN = False
     # EN_EMB, DE_EMB, EMB_DIM = 'basic', 'basic', 512
-    EN_EMB, DE_EMB, EMB_DIM = 'glove', 'basic', 200
+    # EN_EMB, DE_EMB, EMB_DIM = 'glove', 'basic', 200
     # EN_EMB, DE_EMB, EMB_DIM = 'glove', 'glove', 200
-    # EN_EMB, DE_EMB, EMB_DIM = 'elmo', 'basic', 1024
-    # EN_EMB, DE_EMB, EMB_DIM = 'elmo', 'elmo', 1024
+    EN_EMB, DE_EMB, EMB_DIM, SEQ_TRAIN = 'elmo', 'basic', 1024, True
+    # EN_EMB, DE_EMB, EMB_DIM, SEQ_TRAIN = 'elmo', 'elmo', 1024, True
 
     BATCH_SIZE = 512
     EPOCHES = 3
@@ -138,7 +139,8 @@ def main():
         loss_compute = SimpleLossCompute(model.generator, criterion, opt=model_opt)
         # run_epoch(data_generator(train_iter), model, loss_compute, 
         run_epoch((rebatch(pad_idx, b) for b in train_iter), 
-                  model, loss_compute, TEXT.vocab, model_file)
+                  model, loss_compute, TEXT.vocab, 
+                  model_file=model_file, seq_train=SEQ_TRAIN)
 
         model.eval()
         total_loss, total_tokens = 0, 0

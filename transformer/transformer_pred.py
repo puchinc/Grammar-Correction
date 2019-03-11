@@ -87,10 +87,6 @@ def main():
     ###############
     #  Vocabuary  #
     ###############
-    # if 'glove' in [EN_EMB, DE_EMB]:
-        # TEXT.build_vocab(test.src, vectors='glove.6B.200d')
-    # else:
-        # TEXT.vocab = torch.load(vocab_file)
     TEXT.vocab = torch.load(vocab_file)
     pad_idx = TEXT.vocab.stoi["<blank>"]
 

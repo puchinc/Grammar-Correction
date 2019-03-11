@@ -321,7 +321,8 @@ def greedy_decode(model, vocab, src, src_mask, trg=None, max_len=60):
     return out
 
 """ Training Loop """
-def run_epoch(data_iter, model, loss_compute, vocab, model_file):
+def run_epoch(data_iter, model, loss_compute, vocab, 
+              model_file=None, seq_train=False):
     "Standard Training and Logging Function"
     start = time.time()
     total_tokens = 0
@@ -331,7 +332,7 @@ def run_epoch(data_iter, model, loss_compute, vocab, model_file):
     for i, batch in enumerate(data_iter):
         # print("Run Epoche SRC v.s. TRG: ", batch.src.shape, batch.src_mask.shape, batch.trg.shape, batch.trg_mask.shape, batch.trg_y.shape)
 
-        if 'elmo' in model_file:
+        if seq_train:
             # decoder sequential training
             out = greedy_decode(model, vocab, batch.src, batch.src_mask, trg=batch.trg)
         else:
@@ -358,7 +359,7 @@ def run_epoch(data_iter, model, loss_compute, vocab, model_file):
             trans = [[vocab.itos[w] for w in words] for words in s]
             print("Translation:", ' '.join(random.choice(trans)).split('</s>')[0][:50])
 
-            if model_file:
+            if model_file is not None:
                 # print("Save model...")
                 torch.save(model.state_dict(), model_file)
 
