@@ -101,9 +101,9 @@ python trainsformer/transformer_pred.py \
 ### Step 3: Evaluate the model
 ```
 python evaluation/gleu.py \
-    -s data/eval/conll2014.glove.basic.eval.src \
-    -r data/eval/conll2014.glove.basic.eval.trg \
-    --hyp data/eval/conll2014.glove.basic.eval.pred
+    -s data/eval/lang8_small.glove.glove.eval.src \
+    -r data/eval/lang8_small.glove.glove.eval.trg \
+    --hyp data/eval/lang8_small.glove.glove.eval.pred
 ``` 
 
 ## Batched Seq2seq Quickstart
