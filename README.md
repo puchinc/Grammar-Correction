@@ -71,14 +71,14 @@ wget -P data/embs/ -O weights.hdf5 https://s3-us-west-2.amazonaws.com/allennlp/m
 
 [Transformer] http://www.realworldnlpbook.com/blog/building-seq2seq-machine-translation-models-using-allennlp.html
 [ELMo] https://github.com/allenai/allennlp/blob/master/tutorials/how_to/elmo.md 
-* transformer\_env
 
-        pip install allennlp torch numpy matplotlib spacy torchtext seaborn 
-        python -m spacy download en 
+```
+pip install allennlp torch numpy matplotlib spacy torchtext seaborn 
+python -m spacy download en 
+```
 
 ### Step 1: Train the model
 ```
-(transformer_env)
 python transformer/transformer_train.py \
   -src data/test/ \
   -model data/models/ \
@@ -89,7 +89,6 @@ python transformer/transformer_train.py \
 
 ### Step 2: Translation
 ```
-(transformer_env)
 python trainsformer/transformer_pred.py \
   -src data/test/ \
   -model data/models/ \
@@ -101,7 +100,6 @@ python trainsformer/transformer_pred.py \
 
 ### Step 3: Evaluate the model
 ```
-(transformer_env)
 python evaluation/gleu.py \
     -s data/eval/conll2014.glove.basic.eval.src \
     -r data/eval/conll2014.glove.basic.eval.trg \
@@ -111,11 +109,11 @@ python evaluation/gleu.py \
 ## Batched Seq2seq Quickstart
 
 [Batched seq2seq] https://github.com/howardyclo/pytorch-seq2seq-example/blob/master/seq2seq.ipynb
-* batched\_seq2seq\_env
 
-        pip install -r batched_seq2seq/requirements.txt
-        python -m spacy download en_core_web_lg
-    
+``` 
+pip install -r batched_seq2seq/requirements.txt
+python -m spacy download en_core_web_lg
+``` 
 
 ### Step 1: Train and validate the model
 
@@ -123,7 +121,6 @@ You can replace the arguments with source and target of your choice. `emb_type` 
 
 ```
 cd batched_seq2seq
-(batched_seq2seq_env)
 python seq2seq_train.py \
        -train_src ./data/lang8_english_src_10k.txt \
        -train_tgt ./data/lang8_english_tgt_10k.txt \
@@ -134,14 +131,12 @@ python seq2seq_train.py \
 
 ### Step 2: Test the model
 ```
-(batched_seq2seq_env)
 python seq2seq_pred.py \
        -test_src ./data/source_test.txt
 ```
 
 ### Step 3: Evaluate the model
 ```
-(batched_seq2seq_env)
 python ../evaluation/gleu.py \
        -s ./data/source_test.txt \
        -r ./data/target_test1.txt \
@@ -150,21 +145,19 @@ python ../evaluation/gleu.py \
 ```
 
 ## Fine tuning ELMo Model on new data
-[BiLM-TF] https://github.com/allenai/bilm-tf
+[BiLM-TF] https://github.com/allenai/bilm-tf    
 [Elmo-Tutorial] https://github.com/PrashantRanjan09/Elmo-Tutorial
-
 
 ## BERT Embedding
 
 [BERT] https://github.com/huggingface/pytorch-pretrained-BERT
-* bert
-        
-        pip install pytorch-pretrained-bert
 
+```
+pip install pytorch-pretrained-bert
+```
 
 ### Train word embeddings
 ```
-(bert_venv)
 python emb/bert.py --input_file data/test/lang8_small.txt \
         --output_file data/embeddings/lang8_small.bert \
         --bert_mode bert-base-uncased \
