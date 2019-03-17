@@ -3,6 +3,7 @@
 The goal of this project is to experiment with elmo and glove embedding along with transformer and seq2seq framework, seeing if there's an improvement for grammar correction. 
 
 ## Requirements
+If you only want to use the transformer_train.py and trnasformer_pred.py, please jump to the Transformer Quick Start section.
 
 Three datasets
 1. CoNLL-2013 and CoNLL-2014 Shared Task for grammar correction. They have original sentence and corrected sentence with position of error in the sentence and error type. CoNLL-2013 has 5 types of errors while CoNLL-2014 has 28 types of errors. 
@@ -66,36 +67,22 @@ wget -P data/embs/ -O options.json https://s3-us-west-2.amazonaws.com/allennlp/m
 wget -P data/embs/ -O weights.hdf5 https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5
 ```
 
-### Step 4: Virtualenv
+## Transformer Quickstart
 
 [Transformer] http://www.realworldnlpbook.com/blog/building-seq2seq-machine-translation-models-using-allennlp.html
 [ELMo] https://github.com/allenai/allennlp/blob/master/tutorials/how_to/elmo.md 
 * transformer\_env
 
-        pip install allennlp
-        pip install torch numpy matplotlib spacy torchtext seaborn 
+        pip install allennlp torch numpy matplotlib spacy torchtext seaborn 
         python -m spacy download en 
-
-[Batched seq2seq] https://github.com/howardyclo/pytorch-seq2seq-example/blob/master/seq2seq.ipynb
-* batched\_seq2seq\_env
-
-        pip install -r batched_seq2seq/requirements.txt
-        python -m spacy download en_core_web_lg
-    
-[BERT] https://github.com/huggingface/pytorch-pretrained-BERT
-* bert
-        
-        pip install pytorch-pretrained-bert
-
-## Transformer Quickstart
 
 ### Step 1: Train the model
 ```
 (transformer_env)
-python transformer/trainsformer_train.py \
-  -src data/src/ \
+python transformer/transformer_train.py \
+  -src data/test/ \
   -model data/models/ \
-  -corpus lang8 \
+  -corpus lang8_small \
   -en glove \
   -de glove
 ```
@@ -103,11 +90,11 @@ python transformer/trainsformer_train.py \
 ### Step 2: Translation
 ```
 (transformer_env)
-python trainsformer/trainsformer_pred.py \
-  -src data/src/ \
+python trainsformer/transformer_pred.py \
+  -src data/test/ \
   -model data/models/ \
   -eval data/eval/ \
-  -corpus lang8 \
+  -corpus lang8_small \
   -en glove \
   -de glove
 ```
@@ -122,6 +109,13 @@ python evaluation/gleu.py \
 ``` 
 
 ## Batched Seq2seq Quickstart
+
+[Batched seq2seq] https://github.com/howardyclo/pytorch-seq2seq-example/blob/master/seq2seq.ipynb
+* batched\_seq2seq\_env
+
+        pip install -r batched_seq2seq/requirements.txt
+        python -m spacy download en_core_web_lg
+    
 
 ### Step 1: Train and validate the model
 
@@ -161,6 +155,12 @@ python ../evaluation/gleu.py \
 
 
 ## BERT Embedding
+
+[BERT] https://github.com/huggingface/pytorch-pretrained-BERT
+* bert
+        
+        pip install pytorch-pretrained-bert
+
 
 ### Train word embeddings
 ```
