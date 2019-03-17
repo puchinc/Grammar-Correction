@@ -226,6 +226,7 @@ weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_51
 def get_emb(en_emb_name, de_emb_name, vocab, device, d_model=512, 
             elmo_options=options_file, elmo_weights=weight_file):
 
+    elmo = None
     def elmo_emb(batch_words):
         sents = [[vocab.itos[i] for i in words] for words in batch_words]
         # ELMo char_ids input = batch * words * 50
