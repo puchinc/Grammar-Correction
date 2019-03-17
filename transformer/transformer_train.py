@@ -20,6 +20,12 @@ Other options for embeddings:
     -en glove -de glove
     -en elmo -de basic
     -en elmo -de elmo
+
+TODO
+    -en basic -de glove
+    -en basic -de elmo
+    -en glove -de elmo
+    -en elmo -de glove
 """
 
 import numpy as np

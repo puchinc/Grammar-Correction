@@ -78,6 +78,9 @@ python -m spacy download en
 ```
 
 ### Step 1: Train the model
+
+You can replace the arguments with source and target of your choice. `en` and 'de' can be: `glove` for GloVe embedding, `basic` for no pretrained embedding, `elmo` for ELMo embedding 
+
 ```
 python transformer/transformer_train.py \
   -src data/test/ \
