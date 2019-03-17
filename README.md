@@ -92,7 +92,7 @@ python transformer/transformer_train.py \
 
 ### Step 2: Translation
 ```
-python trainsformer/transformer_pred.py \
+python transformer/transformer_pred.py \
   -src data/test/ \
   -model data/models/ \
   -eval data/eval/ \
