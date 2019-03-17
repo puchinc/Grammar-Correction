@@ -1,16 +1,19 @@
-# Reference: 
-# codebase: http://nlp.seas.harvard.edu/2018/04/03/attention.html
-# torchtext load pretrained embeddings: http://anie.me/On-Torchtext/
+"""
+Usage:
+CUDA_VISIBLE_DEVICES=4 python transformer/transformer_pred.py \
+    -src data/test/ \
+    -model data/models/ \
+    -eval data/eval/ \
+    -corpus lang8_small \
+    -en basic -de basic
 
-# Prelims:
-# pip install http://download.pytorch.org/whl/cu80/torch-0.3.0.post4-cp36-cp36m-linux_x86_64.whl numpy matplotlib spacy torchtext seaborn 
-# python -m spacy download en 
-
-# Train:
-# python transformer_pred.py
-
-# Evaluate:
-# python ../evaluation/gleu.py -s source.txt -r target.txt --hyp pred.txt
+Other options for embeddings:
+    -en basic -de basic
+    -en glove -de basic
+    -en glove -de glove
+    -en elmo -de basic
+    -en elmo -de elmo
+"""
 
 import numpy as np
 import torch
@@ -25,46 +28,61 @@ import spacy
 import os
 import sys
 import random
-from pprint import pprint
+import argparse
 
 from Model import MyIterator, make_model, rebatch, batch_size_fn, greedy_decode, get_emb
 from allennlp.modules.elmo import batch_to_ids
 
+def parse_args():
+    parser = argparse.ArgumentParser()        
+    parser.add_argument('-src', '--SRC_DIR')
+    parser.add_argument('-eval', '--EVAL_DIR')
+    parser.add_argument('-model', '--MODEL_DIR')
+    parser.add_argument('-corpus', '--DATA')
+    parser.add_argument('-en', '--EN_EMB')
+    parser.add_argument('-de', '--DE_EMB')
+    args = parser.parse_args()                                      
+
+    return args
+
 def main():
-    BOS_WORD = '<s>'
-    EOS_WORD = '</s>'
-    BLANK_WORD = "<blank>"
+    args = parse_args()
+    SRC_DIR = args.SRC_DIR
+    MODEL_DIR = args.MODEL_DIR
+    EVAL_DIR = args.EVAL_DIR
+    DATA = args.DATA
+    EN_EMB = args.EN_EMB
+    DE_EMB = args.DE_EMB
 
-    DATA = 'conll2014'
-    # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
-    # EN_EMB, DE_EMB, EMB_DIM = 'basic', 'basic', 512
-    # EN_EMB, DE_EMB, EMB_DIM = 'glove', 'basic', 200
-    EN_EMB, DE_EMB, EMB_DIM = 'glove', 'glove', 200
-    # EN_EMB, DE_EMB, EMB_DIM = 'elmo', 'basic', 1024
-    # EN_EMB, DE_EMB, EMB_DIM = 'elmo', 'elmo', 1024
+    if 'glove' in EN_EMB:
+        EMB_DIM = 200
+    elif 'elmo' in EN_EMB:
+        EMB_DIM = 1024
+    else:
+        EMB_DIM = 512
 
-    BATCH_SIZE = 30
+    BATCH_SIZE = 500
+
+    options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json"
+    weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
+    vocab_file = os.path.join(MODEL_DIR, '%s.vocab' % (DATA))
+    model_file = os.path.join(MODEL_DIR, '%s.%s.%s.transformer.pt' % (DATA, EN_EMB, DE_EMB))
+
+    if not os.path.exists(EVAL_DIR):
+        os.makedirs(EVAL_DIR)
 
     # GPU to use
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # device = ("cpu")
 
-    root_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
-    src_dir = os.path.join(root_dir, 'data/src')
-    test_dir = os.path.join(root_dir, 'data/test')
-    eval_dir = os.path.join(root_dir, 'data/eval')
-    vocab_file = os.path.join(root_dir, 'data/models', '%s.vocab' % (DATA))
-
-    elmo_options_file = os.path.join(root_dir, 'data/embs/elmo.json')
-    elmo_weights_file = os.path.join(root_dir, 'data/embs/elmo.hdf5')
-    model_file = os.path.join(root_dir, 'data/models', '%s.%s.%s.transformer.pt' % (DATA, EN_EMB, DE_EMB))
-
-    if not os.path.exists(eval_dir):
-        os.makedirs(eval_dir)
-
     #####################
     #   Data Loading    #
     #####################
+    BOS_WORD = '<s>'
+    EOS_WORD = '</s>'
+    BLANK_WORD = "<blank>"
+    MIN_FREQ = 2
+
     spacy_en = spacy.load('en')
 
     def tokenize_en(text):
@@ -73,8 +91,9 @@ def main():
     TEXT = data.Field(tokenize=tokenize_en, init_token = BOS_WORD,
                      eos_token = EOS_WORD, pad_token=BLANK_WORD)
 
-    test = datasets.TranslationDataset(path=os.path.join(src_dir, DATA), 
+    test = datasets.TranslationDataset(path=os.path.join(SRC_DIR, DATA), 
             exts=('.test.src', '.test.trg'), fields=(TEXT, TEXT))
+    # use the same order as original data
     test_iter = data.Iterator(test, batch_size=BATCH_SIZE, device=device, 
                               sort=False, repeat=False, train=False)
 
@@ -94,8 +113,8 @@ def main():
     #####################
     encoder_emb, decoder_emb = get_emb(EN_EMB, DE_EMB, TEXT.vocab, device, 
                                        d_model=EMB_DIM,
-                                       elmo_options=elmo_options_file, 
-                                       elmo_weights=elmo_weights_file)
+                                       elmo_options=options_file, 
+                                       elmo_weights=weight_file)
 
     ##########################
     #      Translation       #
@@ -105,44 +124,37 @@ def main():
     model.load_state_dict(torch.load(model_file))
     model.eval()
 
-    f_src = open(os.path.join(eval_dir, 
-        '%s.%s.%s.eval.src' % (DATA, EN_EMB, DE_EMB)), 'w+')
-    f_trg = open(os.path.join(eval_dir, 
-        '%s.%s.%s.eval.trg' % (DATA, EN_EMB, DE_EMB)), 'w+')
-    f_pred = open(os.path.join(eval_dir, 
-        '%s.%s.%s.eval.pred' % (DATA, EN_EMB, DE_EMB)), 'w+')
-
     print("Predicting %s %s %s ..." % (DATA, EN_EMB, DE_EMB))
+
+    src, trg, pred = [], [], []
     for batch in (rebatch(pad_idx, b) for b in test_iter):
         out = greedy_decode(model, TEXT.vocab, batch.src, batch.src_mask)
         # print("SRC OUT: ", src.shape, out.shape)
         probs = model.generator(out)
-        _, pred = torch.max(probs, dim = -1)
+        _, prediction = torch.max(probs, dim = -1)
 
         source = [[TEXT.vocab.itos[word] for word in words[1:]] for words in batch.src]
         target = [[TEXT.vocab.itos[word] for word in words[1:]] for words in batch.trg]
-        translation = [[TEXT.vocab.itos[word] for word in words] for words in pred]
+        translation = [[TEXT.vocab.itos[word] for word in words] for words in prediction]
 
         for i in range(len(translation)):
-            src = ' '.join(source[i]).split('</s>')[0]
-            trg = ' '.join(target[i]).split('</s>')[0]
-            pred = ' '.join(translation[i]).split('</s>')[0]
+            src.append(' '.join(source[i]).split('</s>')[0])
+            trg.append(' '.join(target[i]).split('</s>')[0])
+            pred.append(' '.join(translation[i]).split('</s>')[0])
 
-            if '<unk>' in src or '<unk>' in trg:
+            # eliminate data with unkonwn words in src trg
+            if '<unk>' in src[-1] or '<unk>' in trg[-1]:
                 continue
 
-            print("Source:", src)
-            print("Target:", trg)
-            print("Translation:", pred)
+            print("Source:", src[-1])
+            print("Target:", trg[-1])
+            print("Translation:", pred[-1])
             print()
 
-            f_src.write(src + '\n')
-            f_trg.write(trg + '\n')
-            f_pred.write(pred + '\n')
-
-    f_src.close()
-    f_trg.close()
-    f_pred.close()
+    prefix = os.path.join(EVAL_DIR, '%s.%s.%s.eval' % (DATA, EN_EMB, DE_EMB))
+    for sentences, ext in zip([src, trg, pred], ['.src', '.trg', '.pred']):
+        with open(prefix + ext, 'w+') as f:
+            f.write('\n'.join(sentences))
 
 if __name__ == "__main__":
     main()

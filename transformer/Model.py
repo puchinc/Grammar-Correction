@@ -8,7 +8,7 @@ from torch.autograd import Variable
 from torchtext import data, datasets
 import spacy
 
-from allennlp.modules.elmo import Elmo, batch_to_ids
+from allennlp.modules.elmo import batch_to_ids, Elmo
 
 import os
 import sys
@@ -226,7 +226,6 @@ weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_51
 def get_emb(en_emb_name, de_emb_name, vocab, device, d_model=512, 
             elmo_options=options_file, elmo_weights=weight_file):
 
-    elmo = Elmo(elmo_options, elmo_weights, 1, dropout=0).to(device)
     def elmo_emb(batch_words):
         sents = [[vocab.itos[i] for i in words] for words in batch_words]
         # ELMo char_ids input = batch * words * 50
@@ -236,6 +235,7 @@ def get_emb(en_emb_name, de_emb_name, vocab, device, d_model=512,
 
     def choose_emb(emb_name): 
         if 'elmo' in emb_name: 
+            elmo = Elmo(elmo_options, elmo_weights, 1, dropout=0).to(device)
             emb = elmo_emb
         elif 'glove' in emb_name:
             emb = nn.Embedding.from_pretrained(vocab.vectors)
@@ -331,10 +331,6 @@ def greedy_decode(model, vocab, src, src_mask, trg=None, max_len=60):
         if trg is not None:
             ys = trg[:, :i + 1] 
 
-        # print("Decoding memory src_mask, ys, ys_mask: ", 
-                # memory.shape, src_mask.shape, Variable(ys).shape, 
-                # Variable(subsequent_mask(ys.size(1)).type_as(src.data)).shape)
-
         out = model.decode(memory, src_mask, Variable(ys), 
                 Variable(subsequent_mask(ys.size(1)).type_as(src.data)))
 
@@ -349,8 +345,7 @@ def greedy_decode(model, vocab, src, src_mask, trg=None, max_len=60):
     return out
 
 """ Training Loop """
-def run_epoch(data_iter, model, loss_compute, vocab, 
-              model_file=None, seq_train=False):
+def run_epoch(data_iter, model, loss_compute, vocab, seq_train=False):
     "Standard Training and Logging Function"
     start = time.time()
     total_tokens = 0
@@ -381,15 +376,11 @@ def run_epoch(data_iter, model, loss_compute, vocab,
             tokens = 0
             
             # evaluate translation quality
-            out = greedy_decode(model, vocab, batch.src, batch.src_mask)
+            out = greedy_decode(model, vocab, batch.src[:1], batch.src_mask[:1])
             probs = model.generator(out)
             _, s = torch.max(probs, dim = -1) # batch * words
             trans = [[vocab.itos[w] for w in words] for words in s]
             print("Translation:", ' '.join(random.choice(trans)).split('</s>')[0][:50])
-
-            if model_file is not None:
-                # print("Save model...")
-                torch.save(model.state_dict(), model_file)
 
     # avoid zero division error
     return total_loss / total_tokens if total_tokens else 0

@@ -1,6 +1,6 @@
-# Seq2seq Neural Grammar Correction
+# Neural Grammar Correction with Transfer Learning
 
-The goal of this project is to experiment with elmo and bert embedding along with transformer framework and to see if there's an improvement for grammar correction. 
+The goal of this project is to experiment with elmo and glove embedding along with transformer and seq2seq framework, seeing if there's an improvement for grammar correction. 
 
 ## Requirements
 
@@ -10,7 +10,7 @@ Three datasets
 3. AESW Dataset 
 
 
-### Step 1.1: Preprocess conll
+### Step 1.1: Preprocess CoNLL
 remove words between <del></del>, then remove all tags, trim leading and unnecessary spaces 
 
 ```
@@ -18,7 +18,7 @@ awk -F $'\t' '{print $1}' data/src/conll.txt | perl -i -pe 's|<del>.*?</del>||g'
 awk -F $'\t' '{print $2}' data/src/conll.txt | perl -i -pe 's|<del>.*?</del>||g' | perl -i -pe 's|<.*?>||g' | sed -e 's/^[ \t]*//' | tr -s ' ' > data/src/conll.trg
 ```
 
-### Step 1.2: Preprocess conll2014
+### Step 1.2: Preprocess CoNLL2014
 remove empty lines, lines contain http, tag, strange long character words, and very short sentences; trim leading and unnecessary spaces 
 
 ```
@@ -62,8 +62,8 @@ cd -
 
 ### Step 3: Download pretrained word embeddings
 ```
-wget -P data/embs/ https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json
-wget -P data/embs/ https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5
+wget -P data/embs/ -O options.json https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json
+wget -P data/embs/ -O weights.hdf5 https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5
 ```
 
 ### Step 4: Virtualenv
@@ -92,16 +92,33 @@ wget -P data/embs/ https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x409
 ### Step 1: Train the model
 ```
 (transformer_env)
-CUDA_VISIBLE_DEVICES=0,1,2,3 python transformer/trainsformer_train.py
+python transformer/trainsformer_train.py \
+  -src data/src/ \
+  -model data/models/ \
+  -corpus lang8 \
+  -en glove \
+  -de glove
 ```
 
-### Step 2: Evaluate the model
+### Step 2: Translation
+```
+(transformer_env)
+python trainsformer/trainsformer_pred.py \
+  -src data/src/ \
+  -model data/models/ \
+  -eval data/eval/ \
+  -corpus lang8 \
+  -en glove \
+  -de glove
+```
+
+### Step 3: Evaluate the model
 ```
 (transformer_env)
 python evaluation/gleu.py \
-    -s data/eval/conll.glove.glove.eval.src \
-    -r data/eval/conll.glove.glove.eval.trg \
-    --hyp data/eval/conll.glove.glove.eval.pred
+    -s data/eval/conll2014.glove.basic.eval.src \
+    -r data/eval/conll2014.glove.basic.eval.trg \
+    --hyp data/eval/conll2014.glove.basic.eval.pred
 ``` 
 
 ## Batched Seq2seq Quickstart
@@ -137,6 +154,12 @@ python ../evaluation/gleu.py \
        --hyp ./data/pred.txt
 
 ```
+
+## Fine tuning ELMo Model on new data
+[BiLM-TF] https://github.com/allenai/bilm-tf
+[Elmo-Tutorial] https://github.com/PrashantRanjan09/Elmo-Tutorial
+
+
 ## BERT Embedding
 
 ### Train word embeddings
@@ -149,48 +172,3 @@ python emb/bert.py --input_file data/test/lang8_small.txt \
         --batch_size 16
 ```
 
-## Fine tuning ELMo Model on new data
-[Tensorflow]
-* tf
-
-        pip install tensorflow tensorflow-gpu==1.2 h5py
-        python setup.py install
-        python -m unittest discover tests/
-
-[Elmo-Tutorial] https://github.com/PrashantRanjan09/Elmo-Tutorial
-[BiLM-TF] https://github.com/allenai/bilm-tf
-* tf
-    
-        wget -P data/embs/ https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway_tf_checkpoint/model.ckpt-935588.data-00000-of-00001
-        wget -P data/embs/ https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway_tf_checkpoint/model.ckpt-935588.index
-        wget -P data/embs/ https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway_tf_checkpoint/model.ckpt-935588.meta
-        wget -P data/embs/ https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway_tf_checkpoint/options.json
-
-        python parser/prepare_vocab.py
-
-        python bilm-tf/bin/dump_weights.py \
-            --save_dir data/embs \
-            --outfile data/embs/weights.hdf5
-
-        export CUDA_VISIBLE_DEVICES=2,3,4
-        python bilm-tf/bin/restart.py \
-                --train_prefix='data/src/lang8.train.*' \
-                --vocab_file=data/src/vocab-2016-09-10.txt \
-                --save_dir=data/embs \
-                --n_gpus=3 \
-                --batch_size=3000 \
-                --n_epochs=10
-
-        python bilm-tf/bin/train_elmo.py \
-                --train_prefix='data/src/lang8.train.*' \
-                --vocab_file data/src/vocab-2016-09-10.txt \
-                --save_dir data/embs/
-
-        export CUDA_VISIBLE_DEVICES=0,1,2
-        python bilm-tf/bin/train_elmo_updated.py \
-                --train_prefix='data/src/lang8.train.*' \
-                --vocab_file=data/src/lang8.vocab.txt \
-                --save_dir=data/embs \
-                --restart_ckpt_file=data/embs/checkpoint
-
-        

@@ -8,7 +8,7 @@ data/tgt/*
 data/models/*
 data/embeddings/*
 
-**__pycache__/
+**cache**
 **.DS_Store
 .rsync_exclude
 .exrc

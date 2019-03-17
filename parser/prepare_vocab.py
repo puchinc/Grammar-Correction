@@ -8,7 +8,7 @@ def main():
     BOS_WORD = '<s>'
     EOS_WORD = '</s>'
     BLANK_WORD = "<blank>"
-    DATA = 'lang8'
+    DATA = 'conll'
 
     root_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
     src_dir = os.path.join(root_dir, 'data/src')

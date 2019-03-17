@@ -19,7 +19,7 @@ DTYPE = 'float32'
 DTYPE_INT = 'int64'
 
 tf.logging.set_verbosity(tf.logging.INFO)
-
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 def print_variable_summary():
     import pprint

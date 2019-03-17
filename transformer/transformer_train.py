@@ -1,16 +1,26 @@
-# Reference: 
-# codebase: http://nlp.seas.harvard.edu/2018/04/03/attention.html
-# torchtext load pretrained embeddings: http://anie.me/On-Torchtext/
+"""
+Reference: 
+    codebase: http://nlp.seas.harvard.edu/2018/04/03/attention.html
+    torchtext load pretrained embeddings: http://anie.me/On-Torchtext/
 
-# Prelims:
-# pip install http://download.pytorch.org/whl/cu80/torch-0.3.0.post4-cp36-cp36m-linux_x86_64.whl numpy matplotlib spacy torchtext seaborn 
-# python -m spacy download en 
+Prelims:
+    pip install torch numpy matplotlib spacy torchtext seaborn 
+    python -m spacy download en 
 
-# Train:
-# python trainsformer_train.py
+Usage:
+python transformer/transformer_train.py \
+    -src data/test/ \
+    -model data/models/ \
+    -corpus lang8_small \
+    -en basic -de basic
 
-# Evaluate:
-# python ../evaluation/gleu.py -s source.txt -r target.txt --hyp pred.txt
+Other options for embeddings:
+    -en basic -de basic
+    -en glove -de basic
+    -en glove -de glove
+    -en elmo -de basic
+    -en elmo -de elmo
+"""
 
 import numpy as np
 import torch
@@ -25,51 +35,64 @@ import spacy
 import os
 import sys
 import random
+import argparse
 
 from Model import MyIterator, LabelSmoothing, NoamOpt, MultiGPULossCompute, SimpleLossCompute
 from Model import make_model, rebatch, run_epoch, batch_size_fn, get_emb, greedy_decode
 
+def parse_args():
+    parser = argparse.ArgumentParser()        
+    parser.add_argument('-src', '--SRC_DIR')
+    parser.add_argument('-model', '--MODEL_DIR')
+    parser.add_argument('-corpus', '--DATA')
+    parser.add_argument('-en', '--EN_EMB')
+    parser.add_argument('-de', '--DE_EMB')
+    args = parser.parse_args()                                      
+
+    return args
+
 def main():
-    BOS_WORD = '<s>'
-    EOS_WORD = '</s>'
-    BLANK_WORD = "<blank>"
-    MIN_FREQ = 2
+    args = parse_args()
+    SRC_DIR = args.SRC_DIR
+    MODEL_DIR = args.MODEL_DIR
+    DATA = args.DATA
+    EN_EMB = args.EN_EMB
+    DE_EMB = args.DE_EMB
+    SEQ_TRAIN = True if DE_EMB == 'elmo' else False
 
-    DATA = 'conll2014'
+    # TODO currently hidden size is fixed, should be able to adjust 
+    #      based on src and trg embeddings respectively
+    # EMB_DIM should be multiple of h (default 8), look at MultiHeadedAttention
+    if 'glove' in EN_EMB:
+        EMB_DIM = 200
+    elif 'elmo' in EN_EMB:
+        EMB_DIM = 1024
+    else:
+        EMB_DIM = 512
 
-    # EMB_DIM should be multiple of 8, look at MultiHeadedAttention
-    SEQ_TRAIN = False
-    # EN_EMB, DE_EMB, EMB_DIM = 'basic', 'basic', 512
-    # EN_EMB, DE_EMB, EMB_DIM = 'glove', 'basic', 200
-    # EN_EMB, DE_EMB, EMB_DIM = 'glove', 'glove', 200
-    # EN_EMB, DE_EMB, EMB_DIM, SEQ_TRAIN = 'elmo', 'basic', 1024, True
-    EN_EMB, DE_EMB, EMB_DIM, SEQ_TRAIN = 'elmo', 'elmo', 1024, True
-
-    BATCH_SIZE = 200
+    BATCH_SIZE = 1500
     EPOCHES = 100
+
+    options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json"
+    weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
+    vocab_file = os.path.join(MODEL_DIR, '%s.vocab' % (DATA))
+    model_file = os.path.join(MODEL_DIR, '%s.%s.%s.transformer.pt' % (DATA, EN_EMB, DE_EMB))
+
+    if not os.path.exists(MODEL_DIR):
+        os.makedirs(MODEL_DIR)
 
     # GPU to use
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # device = ("cpu")
     # devices = [0, 1, 2, 3]
 
-    root_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
-    src_dir = os.path.join(root_dir, 'data/src')
-    test_dir = os.path.join(root_dir, 'data/test')
-    eval_dir = os.path.join(root_dir, 'data/eval')
-    vocab_file = os.path.join(root_dir, 'data/models', '%s.vocab' % (DATA))
-
-    elmo_options_file = os.path.join(root_dir, 'data/embs/elmo.json')
-    elmo_weights_file = os.path.join(root_dir, 'data/embs/elmo.hdf5')
-    model_file = os.path.join(root_dir, 'data/models', '%s.%s.%s.transformer.pt' % (DATA, EN_EMB, DE_EMB))
-
-    for folder in [src_dir, eval_dir]:
-        if not os.path.exists(folder): 
-            os.makedirs(folder) 
-
     #####################
     #   Data Loading    #
     #####################
+    BOS_WORD = '<s>'
+    EOS_WORD = '</s>'
+    BLANK_WORD = "<blank>"
+    MIN_FREQ = 2
 
     spacy_en = spacy.load('en')
     def tokenize_en(text):
@@ -77,9 +100,9 @@ def main():
     TEXT = data.Field(tokenize=tokenize_en, init_token = BOS_WORD,
                      eos_token = EOS_WORD, pad_token=BLANK_WORD)
 
-    train = datasets.TranslationDataset(path=os.path.join(src_dir, DATA),
+    train = datasets.TranslationDataset(path=os.path.join(SRC_DIR, DATA),
             exts=('.train.src', '.train.trg'), fields=(TEXT, TEXT))
-    val = datasets.TranslationDataset(path=os.path.join(src_dir, DATA), 
+    val = datasets.TranslationDataset(path=os.path.join(SRC_DIR, DATA), 
             exts=('.val.src', '.val.trg'), fields=(TEXT, TEXT))
 
     train_iter = MyIterator(train, batch_size=BATCH_SIZE, device=device,
@@ -111,8 +134,8 @@ def main():
     #####################
     encoder_emb, decoder_emb = get_emb(EN_EMB, DE_EMB, TEXT.vocab, device, 
                                        d_model=EMB_DIM,
-                                       elmo_options=elmo_options_file, 
-                                       elmo_weights=elmo_weights_file)
+                                       elmo_options=options_file, 
+                                       elmo_weights=weight_file)
 
     ##########################
     #   Training the System  #
@@ -123,24 +146,24 @@ def main():
         print("Restart from last checkpoint...")
         model.load_state_dict(torch.load(model_file))
 
-    # for params in model.named_parameters():
-        # print(params)
-    # sys.exit()
-
     criterion = LabelSmoothing(size=len(TEXT.vocab), padding_idx=pad_idx, smoothing=0.1).to(device)
     model_opt = NoamOpt(EMB_DIM, 1, 2000,
                         torch.optim.Adam(model.parameters(), lr=0, 
                         betas=(0.9, 0.98), eps=1e-9))
+
+    # calculate parameters
+    total_params = sum(p.numel() for p in model.parameters()) // 1000000
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad) // 1000000
+    rate = trainable_params / total_params
+    print("Model parameters trainable (%d M) / total (%d M) = %f" % (trainable_params, total_params, rate))
 
     print("Training %s %s %s..." % (DATA, EN_EMB, DE_EMB))
     ### SINGLE GPU
     for epoch in range(EPOCHES):
         model.train()
         loss_compute = SimpleLossCompute(model.generator, criterion, opt=model_opt)
-        # run_epoch(data_generator(train_iter), model, loss_compute, 
         run_epoch((rebatch(pad_idx, b) for b in train_iter), 
-                  model, loss_compute, TEXT.vocab, 
-                  model_file=model_file, seq_train=SEQ_TRAIN)
+                  model, loss_compute, TEXT.vocab, seq_train=SEQ_TRAIN)
 
         model.eval()
         total_loss, total_tokens = 0, 0
@@ -149,7 +172,10 @@ def main():
             loss = loss_compute(out, batch.trg_y, batch.ntokens)
             total_loss += loss
             total_tokens += batch.ntokens
-            break
+
+        print("Save model...")
+        torch.save(model.state_dict(), model_file)
+
         print("Epoch %d/%d - Loss: %f" % (epoch + 1, EPOCHES, total_loss / total_tokens))
 
     ### MULTIPLE GPU
@@ -170,3 +196,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
